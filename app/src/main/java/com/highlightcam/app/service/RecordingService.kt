@@ -16,11 +16,15 @@ import com.highlightcam.app.MainActivity
 import com.highlightcam.app.R
 import com.highlightcam.app.data.SessionRepository
 import com.highlightcam.app.data.UserPreferencesRepository
+import com.highlightcam.app.detection.HighlightDetectionEngine
+import com.highlightcam.app.domain.DetectionEvent
+import com.highlightcam.app.domain.GoalZone
 import com.highlightcam.app.domain.RecorderState
 import com.highlightcam.app.domain.RecordingConfig
 import com.highlightcam.app.domain.VideoQuality
 import com.highlightcam.app.recording.CircularBufferRecorder
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -38,7 +42,10 @@ class RecordingService : LifecycleService() {
 
     @Inject lateinit var userPreferencesRepository: UserPreferencesRepository
 
+    @Inject lateinit var highlightDetectionEngine: HighlightDetectionEngine
+
     private var wakeLock: PowerManager.WakeLock? = null
+    private var detectionJob: Job? = null
 
     override fun onStartCommand(
         intent: Intent?,
@@ -90,9 +97,42 @@ class RecordingService : LifecycleService() {
                 )
             }
         }
+
+        lifecycleScope.launch {
+            val goalZone = sessionRepository.goalZone.value ?: GoalZone.FULL_FRAME
+            highlightDetectionEngine.start(goalZone)
+        }
+
+        detectionJob =
+            lifecycleScope.launch {
+                highlightDetectionEngine.eventFlow.collect { event ->
+                    when (event) {
+                        is DetectionEvent.ClipSaveTriggered -> {
+                            val config = userPreferencesRepository.recordingConfig.first()
+                            val result =
+                                circularBufferRecorder.saveClip(
+                                    config.totalBufferSeconds,
+                                    config.secondsAfterEvent,
+                                )
+                            _clipResultFlow.tryEmit(result)
+                            result.onFailure { e ->
+                                Timber.e(e, "Auto-save clip failed")
+                            }
+                        }
+                        is DetectionEvent.CandidateDetected -> {}
+                        is DetectionEvent.DetectionError -> {
+                            Timber.e("Detection error: %s", event.message)
+                        }
+                    }
+                }
+            }
     }
 
     private fun handleStop() {
+        detectionJob?.cancel()
+        detectionJob = null
+        highlightDetectionEngine.stop()
+
         lifecycleScope.launch {
             try {
                 circularBufferRecorder.stop()
