@@ -65,6 +65,8 @@ media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "medi
 
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 
+coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
 
