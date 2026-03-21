@@ -3,6 +3,12 @@
 package com.highlightcam.app.ui.recording
 
 import android.Manifest
+import android.app.Activity
+import android.content.pm.ActivityInfo
+import android.media.MediaActionSound
+import android.os.Build
+import android.view.HapticFeedbackConstants
+import android.view.WindowManager
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -52,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -74,6 +81,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -113,11 +122,14 @@ fun RecordingScreen(
     val modelAvailable by viewModel.modelAvailable.collectAsState()
     val debugMode by viewModel.debugModeEnabled.collectAsState()
     val debugInfo by viewModel.debugInfo.collectAsState()
+    val soundOnSave by viewModel.soundOnSave.collectAsState()
+    val lowStorage by viewModel.lowStorageWarning.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showDebugPanel by remember { mutableStateOf(false) }
     var showVisionDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val view = LocalView.current
     val cameraPreviewManager =
         remember {
             EntryPointAccessors
@@ -130,6 +142,40 @@ fun RecordingScreen(
             listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO),
         )
     val allGranted = permissionsState.permissions.all { it.status.isGranted }
+
+    DisposableEffect(Unit) {
+        val window = (context as? Activity)?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val activity = context as? Activity
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    LaunchedEffect(clipsSaved) {
+        if (clipsSaved > 0) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            } else {
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            }
+            if (soundOnSave) {
+                try {
+                    val sound = MediaActionSound()
+                    sound.play(MediaActionSound.START_VIDEO_RECORDING)
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(candidateDetected) {
+        if (candidateDetected) {
+            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        }
+    }
 
     LaunchedEffect(recorderState) {
         if (recorderState is RecorderState.Error) {
@@ -150,6 +196,7 @@ fun RecordingScreen(
                     candidateDetected = candidateDetected,
                     modelAvailable = modelAvailable,
                     debugMode = debugMode,
+                    lowStorage = lowStorage,
                     cameraPreviewManager = cameraPreviewManager,
                     onStartRecording = viewModel::startRecording,
                     onStopRecording = viewModel::stopRecording,
@@ -185,6 +232,7 @@ private fun RecordingContent(
     candidateDetected: Boolean,
     modelAvailable: Boolean,
     debugMode: Boolean,
+    lowStorage: Boolean,
     cameraPreviewManager: CameraPreviewManager,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
@@ -231,6 +279,16 @@ private fun RecordingContent(
             )
         }
 
+        if (lowStorage && isRecording) {
+            LowStorageBanner(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(top = if (!modelAvailable) 80.dp else 52.dp),
+            )
+        }
+
         SavingBanner(visible = isSaving)
 
         BottomControls(
@@ -246,7 +304,6 @@ private fun RecordingContent(
 @Composable
 private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
     val lifecycleOwner = LocalLifecycleOwner.current
-
     AndroidView(
         factory = { ctx ->
             PreviewView(ctx).also { pv ->
@@ -257,7 +314,6 @@ private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
         modifier = Modifier.fillMaxSize(),
         update = { pv -> cameraPreviewManager.setSurfaceProvider(pv.surfaceProvider) },
     )
-
     LaunchedEffect(lifecycleOwner) {
         cameraPreviewManager.currentSurfaceProvider?.let { sp ->
             cameraPreviewManager.bindToLifecycle(lifecycleOwner, sp)
@@ -274,33 +330,19 @@ private fun GoalZoneOverlay(
     val shimmerWidth by transition.animateFloat(
         initialValue = 2f,
         targetValue = 4f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(durationMillis = 300),
-                repeatMode = RepeatMode.Reverse,
-            ),
+        animationSpec = infiniteRepeatable(animation = tween(300), repeatMode = RepeatMode.Reverse),
         label = "zone_stroke_width",
     )
-
     val targetColor = if (isCandidate) AmberColor else GreenColor.copy(alpha = 0.4f)
-    val strokeColor by animateColorAsState(
-        targetValue = targetColor,
-        animationSpec = tween(200),
-        label = "zone_color",
-    )
+    val strokeColor by animateColorAsState(targetColor, tween(200), label = "zone_color")
     val strokeDp = if (isCandidate) shimmerWidth else 1.5f
     val strokeWidthPx = with(LocalDensity.current) { strokeDp.dp.toPx() }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val left = zone.xFraction * size.width
-        val top = zone.yFraction * size.height
-        val w = zone.widthFraction * size.width
-        val h = zone.heightFraction * size.height
-
         drawRoundRect(
             color = strokeColor,
-            topLeft = Offset(left, top),
-            size = Size(w, h),
+            topLeft = Offset(zone.xFraction * size.width, zone.yFraction * size.height),
+            size = Size(zone.widthFraction * size.width, zone.heightFraction * size.height),
             cornerRadius = CornerRadius(4.dp.toPx()),
             style = Stroke(width = strokeWidthPx),
         )
@@ -321,11 +363,25 @@ private fun VisionOffBadge(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Text(
-            text = "Vision off \u2014 audio only",
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    letterSpacing = 0.05.sp,
-                ),
+            stringResource(R.string.recording_vision_off),
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.05.sp),
+            color = AmberColor,
+        )
+    }
+}
+
+@Composable
+private fun LowStorageBanner(modifier: Modifier = Modifier) {
+    Box(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(AmberColor.copy(alpha = 0.2f))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(
+            stringResource(R.string.recording_low_storage),
+            style = MaterialTheme.typography.labelSmall,
             color = AmberColor,
         )
     }
@@ -335,16 +391,9 @@ private fun VisionOffBadge(
 private fun VisionOffDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Visual detection disabled") },
-        text = {
-            Text(
-                "Place yolov8n_float16.tflite in app assets to enable visual detection. " +
-                    "Currently running audio-only detection.",
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("OK") }
-        },
+        title = { Text(stringResource(R.string.recording_vision_off_title)) },
+        text = { Text(stringResource(R.string.recording_vision_off_body)) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
     )
 }
 
@@ -356,13 +405,8 @@ private fun TopBar(
 ) {
     val isRecording = recorderState is RecorderState.Recording
     val startedAt = (recorderState as? RecorderState.Recording)?.startedAt ?: 0L
-
     Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RecIndicator(isActive = isRecording)
@@ -371,16 +415,16 @@ private fun TopBar(
         Spacer(modifier = Modifier.weight(1f))
         IconButton(onClick = onNavigateToSettings) {
             Icon(
-                imageVector = ImageVector.vectorResource(R.drawable.ic_notification),
-                contentDescription = "Settings",
+                ImageVector.vectorResource(R.drawable.ic_notification),
+                stringResource(R.string.settings),
                 tint = Color.White,
                 modifier = Modifier.size(22.dp),
             )
         }
         IconButton(onClick = onNavigateToLibrary) {
             Icon(
-                imageVector = ImageVector.vectorResource(R.drawable.ic_notification),
-                contentDescription = "Library",
+                ImageVector.vectorResource(R.drawable.ic_notification),
+                stringResource(R.string.library),
                 tint = Color.White,
                 modifier = Modifier.size(22.dp),
             )
@@ -391,23 +435,10 @@ private fun TopBar(
 @Composable
 private fun RecIndicator(isActive: Boolean) {
     val transition = rememberInfiniteTransition(label = "rec_pulse")
-    val alpha by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.4f,
-        animationSpec = infiniteRepeatable(animation = tween(600), repeatMode = RepeatMode.Reverse),
-        label = "rec_alpha",
-    )
+    val alpha by transition.animateFloat(1f, 0.4f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "rec_alpha")
     val displayAlpha = if (isActive) alpha else 1f
     val dotColor = if (isActive) Color(0xFFFF3B3B) else Color.Gray
-
-    Box(
-        modifier =
-            Modifier
-                .size(10.dp)
-                .drawBehind {
-                    drawCircle(color = dotColor.copy(alpha = displayAlpha), radius = size.minDimension / 2f)
-                },
-    )
+    Box(modifier = Modifier.size(10.dp).drawBehind { drawCircle(dotColor.copy(alpha = displayAlpha), size.minDimension / 2f) })
 }
 
 @Composable
@@ -416,7 +447,6 @@ private fun ElapsedTimer(
     startedAt: Long,
 ) {
     var elapsedSeconds by remember { mutableIntStateOf(0) }
-
     LaunchedEffect(isRecording, startedAt) {
         if (isRecording && startedAt > 0) {
             while (true) {
@@ -427,17 +457,11 @@ private fun ElapsedTimer(
             elapsedSeconds = 0
         }
     }
-
     val minutes = elapsedSeconds / 60
     val seconds = elapsedSeconds % 60
     Text(
-        text = if (isRecording) "%02d:%02d".format(minutes, seconds) else "--:--",
-        style =
-            MaterialTheme.typography.bodyMedium.copy(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 16.sp,
-                letterSpacing = 0.05.sp,
-            ),
+        if (isRecording) "%02d:%02d".format(minutes, seconds) else stringResource(R.string.recording_timer_idle),
+        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 16.sp, letterSpacing = 0.05.sp),
         color = Color.White,
     )
 }
@@ -446,30 +470,21 @@ private fun ElapsedTimer(
 private fun SavingBanner(visible: Boolean) {
     AnimatedVisibility(
         visible = visible,
-        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(top = 56.dp),
+        enter = slideInVertically { -it } + fadeIn(),
+        exit = slideOutVertically { -it } + fadeOut(),
+        modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 56.dp),
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(Modifier.fillMaxWidth().padding(horizontal = 48.dp), contentAlignment = Alignment.Center) {
             Column(
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xFF1E1E1E).copy(alpha = 0.9f))
-                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                Modifier.clip(
+                    RoundedCornerShape(24.dp),
+                ).background(Color(0xFF1E1E1E).copy(alpha = 0.9f)).padding(horizontal = 20.dp, vertical = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("Saving clip\u2026", style = MaterialTheme.typography.bodySmall, color = Color.White)
-                Spacer(modifier = Modifier.height(6.dp))
+                Text(stringResource(R.string.recording_saving_clip), style = MaterialTheme.typography.bodySmall, color = Color.White)
+                Spacer(Modifier.height(6.dp))
                 LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
+                    Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
                     color = GreenColor,
                     trackColor = Color(0xFF2C2C2C),
                 )
@@ -487,34 +502,23 @@ private fun BottomControls(
     onLongPressRecord: (() -> Unit)?,
 ) {
     Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = 32.dp),
-        verticalArrangement = Arrangement.Bottom,
-        horizontalAlignment = Alignment.CenterHorizontally,
+        Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 32.dp),
+        Arrangement.Bottom,
+        Alignment.CenterHorizontally,
     ) {
         AnimatedVisibility(visible = clipsSaved > 0, enter = fadeIn(), exit = fadeOut()) {
             Text(
-                text = "Clips saved: $clipsSaved",
+                stringResource(R.string.recording_clips_saved, clipsSaved),
                 style = MaterialTheme.typography.bodySmall.copy(letterSpacing = 0.05.sp),
                 color = Color.White.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,
             )
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Spacer(modifier = Modifier.width(56.dp))
-            RecordButton(
-                isRecording = isRecording,
-                onClick = onToggleRecording,
-                onLongClick = onLongPressRecord,
-            )
-            SaveButtonSlot(visible = isRecording, onManualSave = onManualSave)
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Spacer(Modifier.width(56.dp))
+            RecordButton(isRecording, onToggleRecording, onLongPressRecord)
+            SaveButtonSlot(isRecording, onManualSave)
         }
     }
 }
@@ -524,11 +528,9 @@ private fun SaveButtonSlot(
     visible: Boolean,
     onManualSave: () -> Unit,
 ) {
-    Box(modifier = Modifier.width(56.dp)) {
-        AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
-            ManualSaveButton(onClick = onManualSave)
-        }
-    }
+    Box(
+        Modifier.width(56.dp),
+    ) { AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) { ManualSaveButton(onManualSave) } }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -538,50 +540,25 @@ private fun RecordButton(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
 ) {
-    val scale by animateFloatAsState(
-        targetValue = if (isRecording) 0.9f else 1f,
-        animationSpec = tween(300),
-        label = "rec_btn_scale",
-    )
-    val buttonColor by animateColorAsState(
-        targetValue = if (isRecording) Color(0xFFFF3B3B) else Color.Transparent,
-        animationSpec = tween(300),
-        label = "rec_btn_color",
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (isRecording) Color(0xFFFF3B3B) else Color.White,
-        animationSpec = tween(300),
-        label = "rec_btn_border",
-    )
+    val scale by animateFloatAsState(if (isRecording) 0.9f else 1f, tween(300), label = "rec_btn_scale")
+    val buttonColor by animateColorAsState(if (isRecording) Color(0xFFFF3B3B) else Color.Transparent, tween(300), label = "rec_btn_color")
+    val borderColor by animateColorAsState(if (isRecording) Color(0xFFFF3B3B) else Color.White, tween(300), label = "rec_btn_border")
     val strokeWidthPx = with(LocalDensity.current) { 3.dp.toPx() }
     val innerCornerPx = with(LocalDensity.current) { if (isRecording) 6.dp.toPx() else 28.dp.toPx() }
     val innerSizeFraction = if (isRecording) 0.42f else 0.75f
-
     Box(
-        modifier =
-            Modifier
-                .size(72.dp)
-                .scale(scale)
-                .clip(CircleShape)
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick,
-                ),
-        contentAlignment = Alignment.Center,
+        Modifier.size(72.dp).scale(scale).clip(CircleShape).combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        Alignment.Center,
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawCircle(
-                color = borderColor,
-                radius = size.minDimension / 2f,
-                style = Stroke(width = strokeWidthPx),
-            )
+        Canvas(Modifier.fillMaxSize()) {
+            drawCircle(borderColor, size.minDimension / 2f, style = Stroke(strokeWidthPx))
             val innerSize = size.minDimension * innerSizeFraction
             val innerOffset = (size.minDimension - innerSize) / 2f
             drawRoundRect(
-                color = if (isRecording) buttonColor else Color.White,
-                topLeft = Offset(innerOffset, innerOffset),
-                size = Size(innerSize, innerSize),
-                cornerRadius = CornerRadius(innerCornerPx),
+                if (isRecording) buttonColor else Color.White,
+                Offset(innerOffset, innerOffset),
+                Size(innerSize, innerSize),
+                CornerRadius(innerCornerPx),
             )
         }
     }
@@ -589,19 +566,19 @@ private fun RecordButton(
 
 @Composable
 private fun ManualSaveButton(onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(48.dp).padding(start = 8.dp)) {
-        Canvas(modifier = Modifier.size(24.dp)) {
+    IconButton(onClick, Modifier.size(48.dp).padding(start = 8.dp)) {
+        Canvas(Modifier.size(24.dp)) {
             drawRoundRect(
-                color = GreenColor,
-                topLeft = Offset(size.width * 0.15f, size.height * 0.05f),
-                size = Size(size.width * 0.7f, size.height * 0.9f),
-                cornerRadius = CornerRadius(3.dp.toPx()),
+                GreenColor,
+                Offset(size.width * 0.15f, size.height * 0.05f),
+                Size(size.width * 0.7f, size.height * 0.9f),
+                CornerRadius(3.dp.toPx()),
             )
             drawRoundRect(
-                color = Color(0xFF080808),
-                topLeft = Offset(size.width * 0.25f, size.height * 0.05f),
-                size = Size(size.width * 0.5f, size.height * 0.35f),
-                cornerRadius = CornerRadius(2.dp.toPx()),
+                Color(0xFF080808),
+                Offset(size.width * 0.25f, size.height * 0.05f),
+                Size(size.width * 0.5f, size.height * 0.35f),
+                CornerRadius(2.dp.toPx()),
             )
         }
     }
@@ -619,49 +596,31 @@ private fun DebugPanel(
         containerColor = Color(0xFF121212),
         tonalElevation = 0.dp,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp),
-        ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
             Text(
-                "Detection Debug",
+                stringResource(R.string.debug_title),
                 style = MaterialTheme.typography.titleSmall,
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
             )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            DebugRmsBar(current = debugInfo.currentRms, baseline = debugInfo.baselineRms)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(16.dp))
+            DebugRmsBar(debugInfo.currentRms, debugInfo.baselineRms)
+            Spacer(Modifier.height(8.dp))
             DebugLabel("Baseline RMS", "%.4f".format(debugInfo.baselineRms))
-            Spacer(modifier = Modifier.height(12.dp))
-
+            Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DebugChip("Ball", debugInfo.ballDetected)
                 DebugChip("In Zone", debugInfo.ballInZone)
                 DebugChip("Model", debugInfo.modelAvailable)
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
             DebugLabel("Players in zone", debugInfo.playerCountInZone.toString())
             DebugLabel("State", debugInfo.stateMachineState)
-            if (debugInfo.lastEventReason.isNotEmpty()) {
-                DebugLabel("Last event", debugInfo.lastEventReason)
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                "Inference (last 10)",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.6f),
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            InferenceSparkline(
-                times = debugInfo.recentInferenceTimesMs,
-                modifier = Modifier.fillMaxWidth().height(40.dp),
-            )
+            if (debugInfo.lastEventReason.isNotEmpty()) DebugLabel("Last event", debugInfo.lastEventReason)
+            Spacer(Modifier.height(12.dp))
+            Text("Inference (last 10)", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+            Spacer(Modifier.height(4.dp))
+            InferenceSparkline(debugInfo.recentInferenceTimesMs, Modifier.fillMaxWidth().height(40.dp))
         }
     }
 }
@@ -679,131 +638,90 @@ private fun DebugRmsBar(
             current > baseline * 2f -> AmberColor
             else -> GreenColor
         }
-
     Column {
         Text("RMS Level", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
-        Spacer(modifier = Modifier.height(4.dp))
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF2C2C2C)),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth(fraction)
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(barColor),
-            )
+        Spacer(Modifier.height(4.dp))
+        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C))) {
+            Box(Modifier.fillMaxWidth(fraction).height(8.dp).clip(RoundedCornerShape(4.dp)).background(barColor))
         }
     }
 }
 
-@Composable
-private fun DebugChip(
+@Composable private fun DebugChip(
     label: String,
     active: Boolean,
 ) {
     Box(
-        modifier =
-            Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (active) GreenColor.copy(alpha = 0.2f) else Color(0xFF2C2C2C))
-                .padding(horizontal = 10.dp, vertical = 4.dp),
+        Modifier.clip(
+            RoundedCornerShape(8.dp),
+        ).background(if (active) GreenColor.copy(alpha = 0.2f) else Color(0xFF2C2C2C)).padding(horizontal = 10.dp, vertical = 4.dp),
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (active) GreenColor else Color.Gray,
-        )
+        Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) GreenColor else Color.Gray)
     }
 }
 
-@Composable
-private fun DebugLabel(
+@Composable private fun DebugLabel(
     label: String,
     value: String,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
-        Text(
-            value,
-            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-            color = Color.White,
-        )
+        Text(value, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color.White)
     }
 }
 
-@Composable
-private fun InferenceSparkline(
+@Composable private fun InferenceSparkline(
     times: List<Long>,
     modifier: Modifier = Modifier,
 ) {
-    Canvas(modifier = modifier) {
+    Canvas(modifier) {
         if (times.size < 2) return@Canvas
         val maxTime = times.maxOrNull()?.toFloat()?.coerceAtLeast(1f) ?: return@Canvas
         val stepX = size.width / (times.size - 1)
-
         val path = Path()
         times.forEachIndexed { i, time ->
             val x = i * stepX
             val y = size.height * (1f - time / maxTime)
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        drawPath(path, GreenColor, style = Stroke(width = 2.dp.toPx()))
+        drawPath(path, GreenColor, style = Stroke(2.dp.toPx()))
     }
 }
 
 @Composable
 private fun PermissionRequestScreen(onRequestPermissions: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color(0xFF080808)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp),
-        ) {
-            Canvas(modifier = Modifier.size(64.dp)) {
-                drawCircle(color = GreenColor.copy(alpha = 0.15f), radius = size.minDimension / 2f)
-                drawCircle(color = GreenColor, radius = size.minDimension / 4f)
+    Box(Modifier.fillMaxSize().background(Color(0xFF080808)), Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+            Canvas(Modifier.size(64.dp)) {
+                drawCircle(GreenColor.copy(alpha = 0.15f), size.minDimension / 2f)
+                drawCircle(GreenColor, size.minDimension / 4f)
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(Modifier.height(24.dp))
             Text(
-                "Camera & microphone access required",
+                stringResource(R.string.permission_camera_mic_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.White,
                 textAlign = TextAlign.Center,
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
             Text(
-                "HighlightCam needs camera and microphone permissions to record video clips.",
+                stringResource(R.string.permission_camera_mic_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
             )
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(Modifier.height(32.dp))
             androidx.compose.material3.Button(
-                onClick = onRequestPermissions,
+                onRequestPermissions,
+                Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors =
                     androidx.compose.material3.ButtonDefaults.buttonColors(
                         containerColor = GreenColor,
                         contentColor = Color(0xFF080808),
                     ),
-                modifier = Modifier.fillMaxWidth().height(48.dp),
             ) {
-                Text(
-                    "Grant Permissions",
-                    style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.05.sp),
-                )
+                Text(stringResource(R.string.permission_grant), style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.05.sp))
             }
         }
     }

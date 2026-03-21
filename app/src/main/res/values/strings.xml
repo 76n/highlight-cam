@@ -1,4 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">HighlightCam</string>
+
+    <!-- Recording -->
+    <string name="recording_vision_off">Vision off — audio only</string>
+    <string name="recording_vision_off_title">Visual detection disabled</string>
+    <string name="recording_vision_off_body">Place yolov8n_float16.tflite in app assets to enable visual detection. Currently running audio-only detection.</string>
+    <string name="recording_saving_clip">Saving clip…</string>
+    <string name="recording_clips_saved">Clips saved: %d</string>
+    <string name="recording_timer_idle">--:--</string>
+    <string name="recording_low_storage">Low storage — less than 500 MB free. Recording may stop unexpectedly.</string>
+
+    <!-- Permissions -->
+    <string name="permission_camera_mic_title">Camera &amp; microphone access required</string>
+    <string name="permission_camera_mic_body">HighlightCam needs camera and microphone permissions to record video clips.</string>
+    <string name="permission_grant">Grant Permissions</string>
+    <string name="permission_camera_title">Camera permission required</string>
+    <string name="permission_camera_body">HighlightCam needs camera access to preview and record the pitch.</string>
+    <string name="permission_grant_camera">Grant Permission</string>
+
+    <!-- Setup -->
+    <string name="setup_instruction">Draw a rectangle over the goal mouth</string>
+    <string name="setup_reconfigure">Reconfigure your goal zone</string>
+    <string name="setup_skip">Skip — use full frame</string>
+    <string name="setup_confirm_title">Confirm Goal Zone</string>
+    <string name="setup_looks_good">Looks good</string>
+    <string name="setup_redraw">Redraw</string>
+    <string name="setup_keep_current">Keep current zone</string>
+
+    <!-- Library -->
+    <string name="library_title">Highlights</string>
+    <string name="library_empty_title">No highlights yet</string>
+    <string name="library_empty_body">Start recording a game to capture automatic highlights</string>
+    <string name="library_start_recording">Start Recording</string>
+    <string name="library_sort_newest">Newest first</string>
+    <string name="library_sort_oldest">Oldest first</string>
+    <string name="library_sort_longest">Longest first</string>
+    <string name="library_share">Share</string>
+    <string name="library_delete">Delete</string>
+    <string name="library_delete_title">Delete clip?</string>
+    <string name="library_delete_body">This will permanently remove this clip.</string>
+    <string name="library_loading_error">Failed to load clips</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_detection">DETECTION</string>
+    <string name="settings_sensitivity_careful">Careful</string>
+    <string name="settings_sensitivity_balanced">Balanced</string>
+    <string name="settings_sensitivity_aggressive">Aggressive</string>
+    <string name="settings_sensitivity_careful_desc">Fewer false positives, may miss some goals</string>
+    <string name="settings_sensitivity_balanced_desc">Recommended for most games</string>
+    <string name="settings_sensitivity_aggressive_desc">Catches everything, more false saves</string>
+    <string name="settings_section_clip_timing">CLIP TIMING</string>
+    <string name="settings_seconds_before">Seconds before event</string>
+    <string name="settings_seconds_after">Seconds after event</string>
+    <string name="settings_section_video">VIDEO</string>
+    <string name="settings_quality_720">720p</string>
+    <string name="settings_quality_1080">1080p</string>
+    <string name="settings_section_goal_zone">GOAL ZONE</string>
+    <string name="settings_reconfigure">Reconfigure</string>
+    <string name="settings_section_app">APP</string>
+    <string name="settings_debug_mode">Debug mode</string>
+    <string name="settings_debug_enabled">Debug panel accessible via long-press on record button</string>
+    <string name="settings_sound_on_save">Sound on clip save</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version %s</string>
+    <string name="settings_about_body">HighlightCam uses on-device AI to detect soccer goals and crowd reactions. It continuously buffers video, and when a highlight is detected, it stitches segments into a single MP4 clip saved to your gallery.\n\nVisual detection uses a YOLOv8n model running on TensorFlow Lite. Audio detection uses Goertzel frequency analysis to identify referee whistles and crowd spikes.</string>
+
+    <!-- Common -->
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="settings">Settings</string>
+    <string name="library">Library</string>
+
+    <!-- Notifications -->
+    <string name="notification_recording_title">HighlightCam</string>
+    <string name="notification_recording_text">Recording in progress</string>
+
+    <!-- Debug -->
+    <string name="debug_title">Detection Debug</string>
 </resources>

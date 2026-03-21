@@ -105,25 +105,33 @@ class RecordingService : LifecycleService() {
 
         detectionJob =
             lifecycleScope.launch {
-                highlightDetectionEngine.eventFlow.collect { event ->
-                    when (event) {
-                        is DetectionEvent.ClipSaveTriggered -> {
-                            val config = userPreferencesRepository.recordingConfig.first()
-                            val result =
-                                circularBufferRecorder.saveClip(
-                                    config.totalBufferSeconds,
-                                    config.secondsAfterEvent,
-                                )
-                            _clipResultFlow.tryEmit(result)
-                            result.onFailure { e ->
-                                Timber.e(e, "Auto-save clip failed")
+                try {
+                    highlightDetectionEngine.eventFlow.collect { event ->
+                        when (event) {
+                            is DetectionEvent.ClipSaveTriggered -> {
+                                try {
+                                    val config = userPreferencesRepository.recordingConfig.first()
+                                    val result =
+                                        circularBufferRecorder.saveClip(
+                                            config.totalBufferSeconds,
+                                            config.secondsAfterEvent,
+                                        )
+                                    _clipResultFlow.tryEmit(result)
+                                    result.onFailure { e ->
+                                        Timber.e(e, "Auto-save clip failed")
+                                    }
+                                } catch (e: Exception) {
+                                    Timber.e(e, "Error during auto-save")
+                                }
+                            }
+                            is DetectionEvent.CandidateDetected -> {}
+                            is DetectionEvent.DetectionError -> {
+                                Timber.e("Detection error: %s", event.message)
                             }
                         }
-                        is DetectionEvent.CandidateDetected -> {}
-                        is DetectionEvent.DetectionError -> {
-                            Timber.e("Detection error: %s", event.message)
-                        }
                     }
+                } catch (e: Exception) {
+                    Timber.e(e, "Detection event collection failed")
                 }
             }
     }
@@ -131,7 +139,11 @@ class RecordingService : LifecycleService() {
     private fun handleStop() {
         detectionJob?.cancel()
         detectionJob = null
-        highlightDetectionEngine.stop()
+        try {
+            highlightDetectionEngine.stop()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to stop detection engine")
+        }
 
         lifecycleScope.launch {
             try {
@@ -204,8 +216,8 @@ class RecordingService : LifecycleService() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("HighlightCam")
-            .setContentText("Recording in progress")
+            .setContentTitle(getString(R.string.notification_recording_title))
+            .setContentText(getString(R.string.notification_recording_text))
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .build()

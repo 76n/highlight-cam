@@ -1,26 +1,19 @@
 package com.highlightcam.app.navigation
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.highlightcam.app.ui.library.LibraryScreen
 import com.highlightcam.app.ui.recording.RecordingScreen
+import com.highlightcam.app.ui.settings.SettingsScreen
 import com.highlightcam.app.ui.setup.SetupScreen
 
 object Routes {
@@ -29,6 +22,8 @@ object Routes {
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
 }
+
+private const val TRANSITION_MS = 350
 
 @Composable
 fun HCNavHost(
@@ -40,75 +35,26 @@ fun HCNavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier,
+        enterTransition = {
+            slideInHorizontally(animationSpec = tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { it } +
+                fadeIn(animationSpec = tween(TRANSITION_MS))
+        },
+        exitTransition = {
+            slideOutHorizontally(animationSpec = tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 3 } +
+                fadeOut(animationSpec = tween(TRANSITION_MS))
+        },
+        popEnterTransition = {
+            slideInHorizontally(animationSpec = tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 3 } +
+                fadeIn(animationSpec = tween(TRANSITION_MS))
+        },
+        popExitTransition = {
+            slideOutHorizontally(animationSpec = tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { it } +
+                fadeOut(animationSpec = tween(TRANSITION_MS))
+        },
     ) {
         composable(Routes.SETUP) { SetupScreen(navController) }
         composable(Routes.RECORDING) { RecordingScreen(navController) }
-        composable(Routes.LIBRARY) { LibraryStub(navController) }
-        composable(Routes.SETTINGS) { SettingsStub(navController) }
+        composable(Routes.LIBRARY) { LibraryScreen(navController) }
+        composable(Routes.SETTINGS) { SettingsScreen(navController) }
     }
-}
-
-@Composable
-private fun LibraryStub(navController: NavController) {
-    StubScreen(name = "Library") {
-        NavLink("← Back") {
-            navController.popBackStack()
-        }
-    }
-}
-
-@Composable
-private fun SettingsStub(navController: NavController) {
-    StubScreen(name = "Settings") {
-        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            NavLink("← Back") {
-                navController.popBackStack()
-            }
-            NavLink("Reconfigure Zone") {
-                navController.navigate(Routes.SETUP) {
-                    popUpTo(Routes.RECORDING) { inclusive = false }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StubScreen(
-    name: String,
-    actions: @Composable () -> Unit = {},
-) {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-            actions()
-        }
-    }
-}
-
-@Composable
-private fun NavLink(
-    label: String,
-    onClick: () -> Unit,
-) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier =
-            Modifier
-                .clickable(onClick = onClick)
-                .padding(12.dp),
-    )
 }

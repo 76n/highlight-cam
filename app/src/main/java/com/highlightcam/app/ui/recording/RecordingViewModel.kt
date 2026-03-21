@@ -3,6 +3,8 @@ package com.highlightcam.app.ui.recording
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Environment
+import android.os.StatFs
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.highlightcam.app.data.SessionRepository
@@ -47,28 +49,31 @@ class RecordingViewModel
             userPreferencesRepository.debugModeEnabled
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), false)
 
+        val soundOnSave: StateFlow<Boolean> =
+            userPreferencesRepository.soundOnSave
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), true)
+
         private val _lastClipUri = MutableStateFlow<Uri?>(null)
         val lastClipUri: StateFlow<Uri?> = _lastClipUri.asStateFlow()
 
         private val _candidateDetected = MutableStateFlow(false)
         val candidateDetected: StateFlow<Boolean> = _candidateDetected.asStateFlow()
 
+        private val _lowStorageWarning = MutableStateFlow(false)
+        val lowStorageWarning: StateFlow<Boolean> = _lowStorageWarning.asStateFlow()
+
         private var candidateTimeoutJob: Job? = null
 
         init {
             viewModelScope.launch {
                 RecordingService.clipResultFlow.collect { result ->
-                    result.onSuccess { uri ->
-                        _lastClipUri.value = uri
-                    }
+                    result.onSuccess { uri -> _lastClipUri.value = uri }
                 }
             }
 
             viewModelScope.launch {
                 val zone = userPreferencesRepository.goalZone.first()
-                if (zone != null) {
-                    sessionRepository.setGoalZone(zone)
-                }
+                if (zone != null) sessionRepository.setGoalZone(zone)
             }
 
             viewModelScope.launch {
@@ -86,8 +91,17 @@ class RecordingViewModel
             }
         }
 
+        @Suppress("DEPRECATION")
         fun startRecording() {
             viewModelScope.launch {
+                try {
+                    val stat = StatFs(Environment.getExternalStorageDirectory().absolutePath)
+                    val availableBytes = stat.availableBlocksLong * stat.blockSizeLong
+                    _lowStorageWarning.value = availableBytes < LOW_STORAGE_BYTES
+                } catch (_: Exception) {
+                    _lowStorageWarning.value = false
+                }
+
                 val config = userPreferencesRepository.recordingConfig.first()
                 val intent =
                     Intent(appContext, RecordingService::class.java).apply {
@@ -99,6 +113,7 @@ class RecordingViewModel
         }
 
         fun stopRecording() {
+            _lowStorageWarning.value = false
             val intent =
                 Intent(appContext, RecordingService::class.java).apply {
                     action = RecordingService.ACTION_STOP
@@ -112,14 +127,8 @@ class RecordingViewModel
                 val intent =
                     Intent(appContext, RecordingService::class.java).apply {
                         action = RecordingService.ACTION_SAVE_CLIP
-                        putExtra(
-                            RecordingService.EXTRA_SECONDS_BEFORE,
-                            config.totalBufferSeconds,
-                        )
-                        putExtra(
-                            RecordingService.EXTRA_SECONDS_AFTER,
-                            config.secondsAfterEvent,
-                        )
+                        putExtra(RecordingService.EXTRA_SECONDS_BEFORE, config.totalBufferSeconds)
+                        putExtra(RecordingService.EXTRA_SECONDS_AFTER, config.secondsAfterEvent)
                     }
                 appContext.startService(intent)
             }
@@ -127,5 +136,6 @@ class RecordingViewModel
 
         companion object {
             private const val CANDIDATE_DISPLAY_MS = 1500L
+            private const val LOW_STORAGE_BYTES = 500L * 1024 * 1024
         }
     }
