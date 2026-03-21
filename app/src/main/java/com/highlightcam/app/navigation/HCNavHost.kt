@@ -20,6 +20,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.highlightcam.app.ui.setup.SetupScreen
 
 object Routes {
     const val SETUP = "setup"
@@ -39,21 +40,10 @@ fun HCNavHost(
         startDestination = startDestination,
         modifier = modifier,
     ) {
-        composable(Routes.SETUP) { SetupStub(navController) }
+        composable(Routes.SETUP) { SetupScreen(navController) }
         composable(Routes.RECORDING) { RecordingStub(navController) }
         composable(Routes.LIBRARY) { LibraryStub(navController) }
         composable(Routes.SETTINGS) { SettingsStub(navController) }
-    }
-}
-
-@Composable
-private fun SetupStub(navController: NavController) {
-    StubScreen(name = "Setup") {
-        NavLink("Start Recording →") {
-            navController.navigate(Routes.RECORDING) {
-                popUpTo(Routes.SETUP) { inclusive = true }
-            }
-        }
     }
 }
 
