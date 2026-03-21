@@ -20,6 +20,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.highlightcam.app.ui.recording.RecordingScreen
 import com.highlightcam.app.ui.setup.SetupScreen
 
 object Routes {
@@ -41,23 +42,9 @@ fun HCNavHost(
         modifier = modifier,
     ) {
         composable(Routes.SETUP) { SetupScreen(navController) }
-        composable(Routes.RECORDING) { RecordingStub(navController) }
+        composable(Routes.RECORDING) { RecordingScreen(navController) }
         composable(Routes.LIBRARY) { LibraryStub(navController) }
         composable(Routes.SETTINGS) { SettingsStub(navController) }
-    }
-}
-
-@Composable
-private fun RecordingStub(navController: NavController) {
-    StubScreen(name = "Recording") {
-        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            NavLink("Library") {
-                navController.navigate(Routes.LIBRARY)
-            }
-            NavLink("Settings") {
-                navController.navigate(Routes.SETTINGS)
-            }
-        }
     }
 }
 

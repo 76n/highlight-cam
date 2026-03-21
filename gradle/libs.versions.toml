@@ -21,6 +21,8 @@ activity-compose = "1.8.2"
 navigation-compose = "2.7.7"
 core-ktx = "1.12.0"
 ktlint = "12.1.0"
+mockito = "5.10.0"
+mockito-kotlin = "5.2.1"
 
 [libraries]
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
@@ -68,6 +70,8 @@ timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "tim
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockito" }
+mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version.ref = "mockito-kotlin" }
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
 
 [plugins]

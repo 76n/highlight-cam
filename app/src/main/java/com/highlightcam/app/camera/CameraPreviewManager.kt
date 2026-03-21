@@ -7,8 +7,13 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
+import androidx.camera.video.VideoCapture
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.highlightcam.app.domain.VideoQuality
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -32,6 +37,10 @@ class CameraPreviewManager
     ) {
         private var cameraProvider: ProcessCameraProvider? = null
 
+        @Volatile
+        var currentSurfaceProvider: Preview.SurfaceProvider? = null
+            private set
+
         private val _frameFlow =
             MutableSharedFlow<Bitmap>(
                 replay = 0,
@@ -45,6 +54,10 @@ class CameraPreviewManager
 
         @Volatile
         private var lastFrameTimeMs = 0L
+
+        fun setSurfaceProvider(provider: Preview.SurfaceProvider?) {
+            currentSurfaceProvider = provider
+        }
 
         @Suppress("MagicNumber", "DEPRECATION")
         suspend fun bindToLifecycle(
@@ -88,6 +101,42 @@ class CameraPreviewManager
                 Timber.e(e, "Camera bind failed")
                 _cameraError.value = e.message ?: "Camera initialization failed"
             }
+        }
+
+        suspend fun bindWithVideoCapture(
+            lifecycleOwner: LifecycleOwner,
+            quality: VideoQuality,
+        ): Recorder {
+            val provider = getProvider()
+            cameraProvider = provider
+
+            val preview =
+                Preview.Builder()
+                    .build()
+                    .also { p -> currentSurfaceProvider?.let { p.setSurfaceProvider(it) } }
+
+            val qualitySelector =
+                when (quality) {
+                    VideoQuality.HD_720 -> QualitySelector.from(Quality.HD)
+                    VideoQuality.FHD_1080 -> QualitySelector.from(Quality.FHD)
+                }
+
+            val recorder =
+                Recorder.Builder()
+                    .setQualitySelector(qualitySelector)
+                    .build()
+
+            val videoCapture = VideoCapture.withOutput(recorder)
+
+            provider.unbindAll()
+            provider.bindToLifecycle(
+                lifecycleOwner,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                preview,
+                videoCapture,
+            )
+            _cameraError.value = null
+            return recorder
         }
 
         fun unbind() {

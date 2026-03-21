@@ -36,10 +36,9 @@
         </activity>
 
         <service
-            android:name=".RecordingService"
+            android:name=".service.RecordingService"
             android:exported="false"
-            android:foregroundServiceType="camera|microphone"
-            tools:ignore="MissingClass" />
+            android:foregroundServiceType="camera|microphone" />
 
     </application>
 
