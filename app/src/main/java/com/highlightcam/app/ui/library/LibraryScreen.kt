@@ -2,9 +2,7 @@
 
 package com.highlightcam.app.ui.library
 
-import android.app.Activity
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import androidx.compose.animation.AnimatedVisibility
@@ -38,6 +36,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -71,12 +70,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -226,47 +223,19 @@ private fun ErrorState(message: String) {
 @Composable
 private fun EmptyState() {
     Column(
-        Modifier.fillMaxWidth().padding(vertical = Spacing.s48),
+        Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        SoccerPitchCanvas()
-        Spacer(Modifier.height(Spacing.s32))
-        Text("No highlights yet", style = HCType.title, color = HC.white)
+        Text("No highlights yet", style = HCType.heading, color = HC.white)
         Spacer(Modifier.height(Spacing.s8))
         Text(
-            stringResource(R.string.library_empty_body),
+            "Highlights will appear here automatically during recording",
             style = HCType.body,
             color = HC.white60,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = Spacing.s48),
+            modifier = Modifier.widthIn(max = 260.dp),
         )
-    }
-}
-
-@Composable
-private fun SoccerPitchCanvas() {
-    val lineColor = HC.white10
-    androidx.compose.foundation.Canvas(Modifier.size(280.dp, 175.dp)) {
-        val s = Stroke(1.dp.toPx())
-        drawRect(lineColor, style = s)
-        drawLine(lineColor, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), 1.dp.toPx())
-        drawCircle(lineColor, 40.dp.toPx(), center, style = s)
-        drawCircle(lineColor, 1.5.dp.toPx(), center)
-        val penW = size.width * 0.183f
-        val penH = size.height * 0.44f
-        val penTop = (size.height - penH) / 2
-        drawRect(lineColor, Offset(0f, penTop), Size(penW, penH), style = s)
-        drawRect(lineColor, Offset(size.width - penW, penTop), Size(penW, penH), style = s)
-        val gaW = size.width * 0.07f
-        val gaH = size.height * 0.22f
-        val gaTop = (size.height - gaH) / 2
-        drawRect(lineColor, Offset(0f, gaTop), Size(gaW, gaH), style = s)
-        drawRect(lineColor, Offset(size.width - gaW, gaTop), Size(gaW, gaH), style = s)
-        val gW = 4.dp.toPx()
-        val gH = size.height * 0.12f
-        val gTop = (size.height - gH) / 2
-        drawRect(lineColor, Offset(-gW / 2, gTop), Size(gW, gH), style = s)
-        drawRect(lineColor, Offset(size.width - gW / 2, gTop), Size(gW, gH), style = s)
     }
 }
 
@@ -411,12 +380,7 @@ private fun FullScreenPlayer(
         }
 
     DisposableEffect(Unit) {
-        val activity = context as? Activity
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        onDispose {
-            player.release()
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
+        onDispose { player.release() }
     }
 
     var controlsVisible by remember { mutableStateOf(true) }

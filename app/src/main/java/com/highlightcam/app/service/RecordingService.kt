@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.MediaActionSound
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -15,6 +16,7 @@ import com.highlightcam.app.MainActivity
 import com.highlightcam.app.R
 import com.highlightcam.app.data.SessionRepository
 import com.highlightcam.app.data.UserPreferencesRepository
+import com.highlightcam.app.detection.AudioAnalyzer
 import com.highlightcam.app.detection.HighlightDetectionEngine
 import com.highlightcam.app.domain.DetectionEvent
 import com.highlightcam.app.domain.GoalZoneSet
@@ -39,8 +41,11 @@ class RecordingService : LifecycleService() {
 
     @Inject lateinit var highlightDetectionEngine: HighlightDetectionEngine
 
+    @Inject lateinit var audioAnalyzer: AudioAnalyzer
+
     private var wakeLock: PowerManager.WakeLock? = null
     private var detectionJob: Job? = null
+    private var mediaActionSound: MediaActionSound? = null
 
     override fun onStartCommand(
         intent: Intent?,
@@ -60,6 +65,11 @@ class RecordingService : LifecycleService() {
     private fun handleStart(intent: Intent) {
         val qualityName = intent.getStringExtra(EXTRA_QUALITY) ?: VideoQuality.HD_720.name
         val quality = runCatching { VideoQuality.valueOf(qualityName) }.getOrDefault(VideoQuality.HD_720)
+
+        mediaActionSound =
+            MediaActionSound().also {
+                it.load(MediaActionSound.START_VIDEO_RECORDING)
+            }
 
         createNotificationChannel()
         ServiceCompat.startForeground(
@@ -92,6 +102,7 @@ class RecordingService : LifecycleService() {
                         when (event) {
                             is DetectionEvent.ClipSaveTriggered -> {
                                 try {
+                                    playSaveSound()
                                     val config = userPreferencesRepository.recordingConfig.first()
                                     circularBufferRecorder.requestSave(config.totalBufferSeconds, config.secondsAfterEvent)
                                 } catch (e: Exception) {
@@ -130,9 +141,18 @@ class RecordingService : LifecycleService() {
     }
 
     private fun handleSaveClip(intent: Intent) {
+        playSaveSound()
         val secondsBefore = intent.getIntExtra(EXTRA_SECONDS_BEFORE, RecordingConfig().totalBufferSeconds)
         val secondsAfter = intent.getIntExtra(EXTRA_SECONDS_AFTER, RecordingConfig().secondsAfterEvent)
         circularBufferRecorder.requestSave(secondsBefore, secondsAfter)
+    }
+
+    private fun playSaveSound() {
+        try {
+            mediaActionSound?.play(MediaActionSound.START_VIDEO_RECORDING)
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to play save sound")
+        }
     }
 
     private fun acquireWakeLock() {
@@ -174,7 +194,26 @@ class RecordingService : LifecycleService() {
         ).setContentText(getString(R.string.notification_recording_text)).setOngoing(true).setContentIntent(pendingIntent).build()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        handleStop()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        handleStop()
+        try {
+            audioAnalyzer.stop()
+        } catch (e: Throwable) {
+            Timber.w(e, "AudioAnalyzer stop error")
+        }
+        try {
+            mediaActionSound?.release()
+        } catch (e: Throwable) {
+            Timber.w(e, "MediaActionSound release error")
+        }
+        mediaActionSound = null
         releaseWakeLock()
         super.onDestroy()
     }

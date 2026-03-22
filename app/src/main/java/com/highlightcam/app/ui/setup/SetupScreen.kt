@@ -32,10 +32,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -204,13 +208,20 @@ private fun SetupContent(
                 Spacer(Modifier.height(Spacing.s8))
                 SetupStepDots(uiState)
                 if (uiState.step == SetupStep.FINE_TUNING) {
-                    Spacer(Modifier.height(Spacing.s12))
-                    Text(
-                        "Start over",
-                        style = HCType.micro,
-                        color = HC.white60,
+                    Spacer(Modifier.height(Spacing.s24))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable(onClick = onRedraw),
-                    )
+                    ) {
+                        Icon(
+                            Icons.Filled.Replay,
+                            contentDescription = null,
+                            tint = HC.white60,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(Spacing.s4))
+                        Text("Start over", style = HCType.micro, color = HC.white60)
+                    }
                 }
             }
         }

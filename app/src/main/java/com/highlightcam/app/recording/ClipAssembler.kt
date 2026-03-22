@@ -123,13 +123,22 @@ class ClipAssembler
                     }
                     muxer.release()
 
+                    check(outputFile.exists() && outputFile.length() > 0) {
+                        "Muxer produced empty or missing file: ${outputFile.absolutePath}"
+                    }
+
                     val uri = saveToMediaStore(outputFile)
                     outputFile.delete()
+
+                    verifyMediaStoreEntry(uri)
+
                     uri
                 }
             }
 
         private fun saveToMediaStore(file: File): Uri {
+            val resolver = context.contentResolver
+
             val values =
                 ContentValues().apply {
                     put(
@@ -146,23 +155,31 @@ class ClipAssembler
                     }
                 }
 
-            val resolver = context.contentResolver
             val uri =
                 resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
                     ?: throw IllegalStateException("MediaStore insert failed")
 
             resolver.openOutputStream(uri)?.use { out ->
                 file.inputStream().use { input -> input.copyTo(out) }
-            } ?: throw IllegalStateException("Failed to open output stream")
+            } ?: throw IllegalStateException("Failed to open output stream for $uri")
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                values.clear()
-                values.put(MediaStore.Video.Media.IS_PENDING, 0)
-                resolver.update(uri, values, null, null)
+                val update = ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }
+                resolver.update(uri, update, null, null)
             }
 
             Timber.d("Clip saved to MediaStore: %s", uri)
             return uri
+        }
+
+        private fun verifyMediaStoreEntry(uri: Uri) {
+            val resolver = context.contentResolver
+            resolver.query(uri, arrayOf(MediaStore.Video.Media.SIZE), null, null, null)
+                ?.use { cursor ->
+                    check(cursor.moveToFirst()) { "MediaStore row missing for $uri" }
+                    val size = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE))
+                    check(size > 0) { "MediaStore entry has zero size for $uri" }
+                } ?: throw IllegalStateException("MediaStore query returned null for $uri")
         }
 
         companion object {

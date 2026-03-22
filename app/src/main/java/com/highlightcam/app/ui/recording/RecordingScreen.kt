@@ -4,8 +4,6 @@ package com.highlightcam.app.ui.recording
 
 import android.Manifest
 import android.app.Activity
-import android.content.pm.ActivityInfo
-import android.media.MediaActionSound
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.WindowManager
@@ -50,9 +48,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Crop
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SportsScore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -69,6 +67,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -133,7 +132,6 @@ fun RecordingScreen(
     val modelAvailable by viewModel.modelAvailable.collectAsState()
     val debugMode by viewModel.debugModeEnabled.collectAsState()
     val debugInfo by viewModel.debugInfo.collectAsState()
-    val soundOnSave by viewModel.soundOnSave.collectAsState()
     val lowStorage by viewModel.lowStorageWarning.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showDebugPanel by remember { mutableStateOf(false) }
@@ -155,11 +153,8 @@ fun RecordingScreen(
     DisposableEffect(Unit) {
         val window = (context as? Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val activity = context as? Activity
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         onDispose {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
 
@@ -169,12 +164,6 @@ fun RecordingScreen(
                 view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
             } else {
                 view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            }
-            if (soundOnSave) {
-                try {
-                    MediaActionSound().play(MediaActionSound.START_VIDEO_RECORDING)
-                } catch (_: Exception) {
-                }
             }
         }
     }
@@ -246,7 +235,13 @@ private fun RecordingContent(
 ) {
     val isRecording = recorderState is RecorderState.Recording || recorderState is RecorderState.SavingClip
     val isSaving = recorderState is RecorderState.SavingClip
-    val startedAt = (recorderState as? RecorderState.Recording)?.startedAt ?: 0L
+    val startedAt =
+        when (val state = recorderState) {
+            is RecorderState.Recording -> state.startedAt
+            else -> 0L
+        }
+    var rememberedStartedAt by remember { mutableLongStateOf(0L) }
+    if (startedAt > 0L) rememberedStartedAt = startedAt
     val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(isRecording) {
@@ -304,18 +299,20 @@ private fun RecordingContent(
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(start = Spacing.s20, top = Spacing.s20),
         ) {
-            StatusChip(
-                mode = chipMode,
-                modifier = if (lowStorage) Modifier.clickable(onClick = onShowLowStorageDialog) else Modifier,
-            )
-            AnimatedVisibility(
-                visible = isRecording,
-                enter = fadeIn() + slideInVertically { -it / 3 },
-                exit = fadeOut(),
-            ) {
-                Column {
-                    Spacer(Modifier.height(Spacing.s8))
-                    Timecode(startedAt)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusChip(
+                    mode = chipMode,
+                    modifier = if (lowStorage) Modifier.clickable(onClick = onShowLowStorageDialog) else Modifier,
+                )
+                AnimatedVisibility(
+                    visible = isRecording,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                ) {
+                    Row {
+                        Spacer(Modifier.width(Spacing.s8))
+                        Timecode(rememberedStartedAt)
+                    }
                 }
             }
             AnimatedVisibility(
@@ -444,7 +441,7 @@ private fun Timecode(startedAt: Long) {
     }
     Text(
         "%02d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
-        style = HCType.nums,
+        style = HCType.label.copy(fontFamily = FontFamily.Monospace),
         color = HC.white,
     )
 }
@@ -512,13 +509,13 @@ private fun CaptureButton(
     onClick: () -> Unit,
 ) {
     val bgColor by animateColorAsState(
-        if (enabled) HC.white20 else HC.white10,
-        tween(200),
+        if (enabled) HC.green else HC.white10,
+        tween(300),
         label = "cap_bg",
     )
     val iconTint by animateColorAsState(
         if (enabled) HC.white else HC.white.copy(alpha = 0.4f),
-        tween(200),
+        tween(300),
         label = "cap_tint",
     )
     Box(
@@ -530,10 +527,10 @@ private fun CaptureButton(
         Alignment.Center,
     ) {
         Icon(
-            Icons.Filled.SportsScore,
+            Icons.Filled.Flag,
             contentDescription = null,
             tint = iconTint,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(26.dp),
         )
     }
 }

@@ -110,8 +110,16 @@ class AudioAnalyzer
             recordJob?.cancel()
             recordJob = null
             audioRecord?.let {
-                it.stop()
-                it.release()
+                try {
+                    it.stop()
+                } catch (e: Throwable) {
+                    Timber.w(e, "AudioRecord.stop() error")
+                }
+                try {
+                    it.release()
+                } catch (e: Throwable) {
+                    Timber.w(e, "AudioRecord.release() error")
+                }
             }
             audioRecord = null
         }
