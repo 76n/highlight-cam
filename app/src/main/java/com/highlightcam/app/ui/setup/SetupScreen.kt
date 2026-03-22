@@ -12,7 +12,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -33,11 +36,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -140,7 +141,6 @@ fun SetupScreen(
 }
 
 @Suppress("LongParameterList", "LongMethod")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SetupContent(
     uiState: SetupUiState,
@@ -156,6 +156,8 @@ private fun SetupContent(
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     val lifecycleOwner = LocalLifecycleOwner.current
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
+
+    DisposableEffect(Unit) { onDispose { viewSize = IntSize.Zero } }
 
     LaunchedEffect(previewView, lifecycleOwner) {
         previewView?.let { cameraPreviewManager.bindToLifecycle(lifecycleOwner, it.surfaceProvider) }
@@ -201,6 +203,15 @@ private fun SetupContent(
                 FloatingChip { Text(instruction, style = HCType.label, color = HC.white) }
                 Spacer(Modifier.height(Spacing.s8))
                 SetupStepDots(uiState)
+                if (uiState.step == SetupStep.FINE_TUNING) {
+                    Spacer(Modifier.height(Spacing.s12))
+                    Text(
+                        "Start over",
+                        style = HCType.micro,
+                        color = HC.white60,
+                        modifier = Modifier.clickable(onClick = onRedraw),
+                    )
+                }
             }
         }
 
@@ -230,24 +241,18 @@ private fun SetupContent(
         }
     }
 
-    if (uiState.step == SetupStep.CONFIRMING) {
-        ModalBottomSheet(
-            onDismissRequest = onRedraw,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            scrimColor = Color.Black.copy(alpha = 0.6f),
-            containerColor = HC.surface,
-            shape = RoundedCornerShape(topStart = Radii.r24, topEnd = Radii.r24),
-            dragHandle = null,
-            windowInsets = WindowInsets.safeDrawing,
-        ) {
-            ConfirmSheet(
-                goalAPoints = uiState.goalAPoints,
-                goalBPoints = uiState.goalBPoints,
-                goalBEnabled = uiState.goalBEnabled,
-                onConfirm = onConfirm,
-                onRedraw = onRedraw,
-            )
-        }
+    AnimatedVisibility(
+        visible = uiState.step == SetupStep.CONFIRMING,
+        enter = fadeIn() + slideInVertically { it },
+        exit = fadeOut() + slideOutVertically { it },
+    ) {
+        ConfirmOverlay(
+            goalAPoints = uiState.goalAPoints,
+            goalBPoints = uiState.goalBPoints,
+            goalBEnabled = uiState.goalBEnabled,
+            onConfirm = onConfirm,
+            onRedraw = onRedraw,
+        )
     }
 }
 
@@ -307,11 +312,13 @@ private fun ZoneOverlay(
     val tapOrDragModifier =
         when (state.step) {
             SetupStep.PLACING_A, SetupStep.PLACING_B ->
-                Modifier.pointerInput(state.step) {
-                    detectTapGestures { offset -> onCanvasTap(offset.x / w, offset.y / h) }
+                Modifier.pointerInput(state.step, viewSize) {
+                    detectTapGestures { offset ->
+                        if (w > 0f && h > 0f) onCanvasTap(offset.x / w, offset.y / h)
+                    }
                 }
             SetupStep.FINE_TUNING, SetupStep.CONFIRMING ->
-                Modifier.pointerInput(state.step) {
+                Modifier.pointerInput(state.step, viewSize) {
                     detectDragGestures(
                         onDragStart = { offset -> dragTarget = findClosestHandle(offset, state, w, h) },
                         onDrag = { change, _ ->
@@ -417,49 +424,48 @@ private fun findClosestHandle(
 }
 
 @Composable
-private fun ConfirmSheet(
+private fun ConfirmOverlay(
     goalAPoints: List<NormalizedPoint>,
     goalBPoints: List<NormalizedPoint>,
     goalBEnabled: Boolean,
     onConfirm: () -> Unit,
     onRedraw: () -> Unit,
 ) {
-    Column(
+    Box(
         Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.s24),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .fillMaxSize()
+            .background(HC.bg.copy(alpha = 0.95f))
+            .safeDrawingPadding(),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
+        Column(
             Modifier
-                .padding(top = Spacing.s16)
-                .size(32.dp, 3.dp)
-                .clip(RoundedCornerShape(Radii.r100))
-                .background(HC.white20),
-        )
-        Spacer(Modifier.height(Spacing.s24))
-        if (goalBEnabled) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
-            ) {
-                ZonePreviewCanvas(goalAPoints, HC.green, "Goal A", Modifier.weight(1f))
-                ZonePreviewCanvas(goalBPoints, HC.blue, "Goal B", Modifier.weight(1f))
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.s24),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (goalBEnabled) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
+                ) {
+                    ZonePreviewCanvas(goalAPoints, HC.green, "Goal A", Modifier.weight(1f))
+                    ZonePreviewCanvas(goalBPoints, HC.blue, "Goal B", Modifier.weight(1f))
+                }
+            } else {
+                ZonePreviewCanvas(goalAPoints, HC.green, "Goal A", Modifier.fillMaxWidth())
+                Spacer(Modifier.height(Spacing.s8))
+                Text(
+                    "Single goal mode \u2014 Goal B not configured",
+                    style = HCType.micro,
+                    color = HC.white60,
+                )
             }
-        } else {
-            ZonePreviewCanvas(goalAPoints, HC.green, "Goal A", Modifier.fillMaxWidth())
-            Spacer(Modifier.height(Spacing.s8))
-            Text(
-                "Single goal mode \u2014 Goal B not configured",
-                style = HCType.micro,
-                color = HC.white60,
-            )
+            Spacer(Modifier.height(Spacing.s24))
+            PrimaryButton("Let's go", onClick = onConfirm)
+            Spacer(Modifier.height(Spacing.s12))
+            GhostButton("Redo", onClick = onRedraw)
         }
-        Spacer(Modifier.height(Spacing.s24))
-        PrimaryButton("Let's go", onClick = onConfirm)
-        Spacer(Modifier.height(Spacing.s12))
-        GhostButton("Redo", onClick = onRedraw)
-        Spacer(Modifier.height(Spacing.s24))
     }
 }
 
@@ -474,6 +480,7 @@ private fun ZonePreviewCanvas(
         androidx.compose.foundation.Canvas(
             Modifier
                 .fillMaxWidth()
+                .heightIn(max = 180.dp)
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(Radii.r12))
                 .background(HC.bg),

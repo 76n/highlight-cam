@@ -50,10 +50,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SportsScore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -367,20 +367,20 @@ private fun RecordingContent(
                         visible = isRecording,
                         enter = fadeIn(tween(250)) + slideInHorizontally(tween(250)) { it },
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.clickable(onClick = onManualSave),
+                        Box(
+                            Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(HC.white10)
+                                .clickable(onClick = onManualSave),
+                            Alignment.Center,
                         ) {
-                            FloatingChip {
-                                Icon(
-                                    Icons.Filled.BookmarkAdd,
-                                    contentDescription = null,
-                                    tint = HC.white,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                            Spacer(Modifier.height(Spacing.s4))
-                            Text("Save clip", style = HCType.micro, color = HC.white)
+                            Icon(
+                                Icons.Filled.SportsScore,
+                                contentDescription = null,
+                                tint = HC.white,
+                                modifier = Modifier.size(24.dp),
+                            )
                         }
                     }
                 }

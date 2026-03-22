@@ -39,9 +39,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -50,7 +48,6 @@ import androidx.compose.material.icons.filled.Forward5
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay5
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -94,10 +91,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.navigation.NavController
 import com.highlightcam.app.R
-import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.ui.components.GhostButton
 import com.highlightcam.app.ui.components.HCIconButton
-import com.highlightcam.app.ui.components.PrimaryButton
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
 import com.highlightcam.app.ui.theme.Radii
@@ -110,13 +105,13 @@ import java.util.Date
 import java.util.Locale
 
 @Suppress("LongMethod")
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryScreen(
     navController: NavController,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val sortOrder by viewModel.sortOrder.collectAsState()
     var playerClip by remember { mutableStateOf<LibraryClip?>(null) }
     var selectedClip by remember { mutableStateOf<LibraryClip?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -134,40 +129,57 @@ fun LibraryScreen(
             .fillMaxSize()
             .background(HC.bg),
     ) {
-        Column(Modifier.fillMaxSize()) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        top = insets.calculateTopPadding() + Spacing.s24,
-                        bottom = Spacing.s24,
-                        start = insets.calculateLeftPadding(layoutDir) + Spacing.s24,
-                        end = insets.calculateRightPadding(layoutDir) + Spacing.s24,
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                HCIconButton(Icons.AutoMirrored.Filled.ArrowBack, onClick = { navController.popBackStack() })
-                Spacer(Modifier.width(Spacing.s16))
-                Text("Highlights", style = HCType.heading, color = HC.white, modifier = Modifier.weight(1f))
-                HCIconButton(Icons.Filled.Sort, onClick = { viewModel.setSortOrder(nextSort(sortOrder)) })
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding =
+                PaddingValues(
+                    top = insets.calculateTopPadding() + Spacing.s24,
+                    bottom = insets.calculateBottomPadding() + Spacing.s20,
+                    start = insets.calculateLeftPadding(layoutDir) + Spacing.s20,
+                    end = insets.calculateRightPadding(layoutDir) + Spacing.s20,
+                ),
+        ) {
+            item(key = "header") {
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = Spacing.s24),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HCIconButton(Icons.AutoMirrored.Filled.ArrowBack, onClick = { navController.popBackStack() })
+                    Spacer(Modifier.width(Spacing.s16))
+                    Text("Highlights", style = HCType.heading, color = HC.white)
+                }
             }
 
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                when (val state = uiState) {
-                    is LibraryUiState.Loading -> LoadingState()
-                    is LibraryUiState.Empty ->
-                        EmptyState(
-                            onStartRecording = {
-                                navController.navigate(Routes.RECORDING) { popUpTo(Routes.LIBRARY) { inclusive = true } }
-                            },
-                        )
-                    is LibraryUiState.Error -> ErrorState(state.message)
-                    is LibraryUiState.Loaded ->
-                        ClipGrid(
-                            clips = state.clips,
-                            onClipTap = { playerClip = it },
-                            onClipLongPress = { selectedClip = it },
-                        )
+            when (val state = uiState) {
+                is LibraryUiState.Loading ->
+                    item(key = "loading") { LoadingState() }
+                is LibraryUiState.Empty ->
+                    item(key = "empty") { EmptyState() }
+                is LibraryUiState.Error ->
+                    item(key = "error") { ErrorState(state.message) }
+                is LibraryUiState.Loaded -> {
+                    val rows = state.clips.chunked(2)
+                    items(rows.size, key = { rows[it].first().id }) { rowIndex ->
+                        val row = rows[rowIndex]
+                        Row(
+                            Modifier.fillMaxWidth().padding(bottom = 3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            row.forEach { clip ->
+                                ClipCell(
+                                    clip = clip,
+                                    modifier =
+                                        Modifier
+                                            .weight(1f)
+                                            .combinedClickable(
+                                                onClick = { playerClip = clip },
+                                                onLongClick = { selectedClip = clip },
+                                            ),
+                                )
+                            }
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         }
@@ -197,13 +209,6 @@ fun LibraryScreen(
     }
 }
 
-private fun nextSort(current: SortOrder): SortOrder =
-    when (current) {
-        SortOrder.NEWEST -> SortOrder.OLDEST
-        SortOrder.OLDEST -> SortOrder.LONGEST
-        SortOrder.LONGEST -> SortOrder.NEWEST
-    }
-
 @Composable
 private fun LoadingState() {
     Box(Modifier.fillMaxSize(), Alignment.Center) {
@@ -219,23 +224,22 @@ private fun ErrorState(message: String) {
 }
 
 @Composable
-private fun EmptyState(onStartRecording: () -> Unit) {
-    Box(Modifier.fillMaxSize(), Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            SoccerPitchCanvas()
-            Spacer(Modifier.height(Spacing.s32))
-            Text("No highlights yet", style = HCType.title, color = HC.white)
-            Spacer(Modifier.height(Spacing.s8))
-            Text(
-                stringResource(R.string.library_empty_body),
-                style = HCType.body,
-                color = HC.white60,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = Spacing.s64),
-            )
-            Spacer(Modifier.height(Spacing.s40))
-            PrimaryButton("Start Recording", onClick = onStartRecording, fixedWidth = 180.dp)
-        }
+private fun EmptyState() {
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = Spacing.s48),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        SoccerPitchCanvas()
+        Spacer(Modifier.height(Spacing.s32))
+        Text("No highlights yet", style = HCType.title, color = HC.white)
+        Spacer(Modifier.height(Spacing.s8))
+        Text(
+            stringResource(R.string.library_empty_body),
+            style = HCType.body,
+            color = HC.white60,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = Spacing.s48),
+        )
     }
 }
 
@@ -263,41 +267,6 @@ private fun SoccerPitchCanvas() {
         val gTop = (size.height - gH) / 2
         drawRect(lineColor, Offset(-gW / 2, gTop), Size(gW, gH), style = s)
         drawRect(lineColor, Offset(size.width - gW / 2, gTop), Size(gW, gH), style = s)
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun ClipGrid(
-    clips: List<LibraryClip>,
-    onClipTap: (LibraryClip) -> Unit,
-    onClipLongPress: (LibraryClip) -> Unit,
-) {
-    val insets = WindowInsets.safeDrawing.asPaddingValues()
-    val layoutDir = LocalLayoutDirection.current
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding =
-            PaddingValues(
-                start = insets.calculateLeftPadding(layoutDir) + Spacing.s20,
-                top = Spacing.s20,
-                end = insets.calculateRightPadding(layoutDir) + Spacing.s20,
-                bottom = insets.calculateBottomPadding() + Spacing.s20,
-            ),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        items(clips, key = { it.id }) { clip ->
-            ClipCell(
-                clip = clip,
-                modifier =
-                    Modifier.combinedClickable(
-                        onClick = { onClipTap(clip) },
-                        onLongClick = { onClipLongPress(clip) },
-                    ),
-            )
-        }
     }
 }
 

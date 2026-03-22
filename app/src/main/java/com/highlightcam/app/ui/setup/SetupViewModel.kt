@@ -57,7 +57,17 @@ class SetupViewModel
         init {
             viewModelScope.launch {
                 val existing = userPreferencesRepository.goalZoneSet.first()
-                _uiState.update { it.copy(isReconfiguring = existing != null) }
+                if (existing != null) {
+                    _uiState.update {
+                        it.copy(
+                            isReconfiguring = true,
+                            step = SetupStep.FINE_TUNING,
+                            goalAPoints = existing.goalA.toPoints(),
+                            goalBPoints = existing.goalB?.toPoints() ?: emptyList(),
+                            goalBEnabled = existing.hasGoalB,
+                        )
+                    }
+                }
             }
         }
 

@@ -122,11 +122,39 @@ class SetupViewModelTest {
     }
 
     @Test
-    fun `isReconfiguring is true when goalZoneSet exists`() =
+    fun `isReconfiguring is true when goalZoneSet exists and starts in FINE_TUNING`() =
         testScope.runTest {
             userPrefsRepo.updateGoalZoneSet(GoalZoneSet.DEFAULT)
             val vm = SetupViewModel(userPrefsRepo, sessionRepo)
             assertTrue(vm.uiState.value.isReconfiguring)
+            assertEquals(SetupStep.FINE_TUNING, vm.uiState.value.step)
+            assertEquals(4, vm.uiState.value.goalAPoints.size)
+            assertTrue(vm.uiState.value.goalBEnabled)
+            assertEquals(4, vm.uiState.value.goalBPoints.size)
+        }
+
+    @Test
+    fun `reconfigure with single goal starts in FINE_TUNING with only Goal A`() =
+        testScope.runTest {
+            val singleGoal = GoalZoneSet(goalA = com.highlightcam.app.domain.GoalZone.GOAL_A_DEFAULT, goalB = null)
+            userPrefsRepo.updateGoalZoneSet(singleGoal)
+            val vm = SetupViewModel(userPrefsRepo, sessionRepo)
+            assertTrue(vm.uiState.value.isReconfiguring)
+            assertEquals(SetupStep.FINE_TUNING, vm.uiState.value.step)
+            assertEquals(4, vm.uiState.value.goalAPoints.size)
+            assertFalse(vm.uiState.value.goalBEnabled)
+            assertTrue(vm.uiState.value.goalBPoints.isEmpty())
+        }
+
+    @Test
+    fun `redraw from reconfigure resets to PLACING_A`() =
+        testScope.runTest {
+            userPrefsRepo.updateGoalZoneSet(GoalZoneSet.DEFAULT)
+            val vm = SetupViewModel(userPrefsRepo, sessionRepo)
+            assertEquals(SetupStep.FINE_TUNING, vm.uiState.value.step)
+            vm.redraw()
+            assertEquals(SetupStep.PLACING_A, vm.uiState.value.step)
+            assertTrue(vm.uiState.value.goalAPoints.isEmpty())
         }
 
     @Test
