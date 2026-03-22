@@ -1,6 +1,7 @@
 package com.highlightcam.app.detection
 
 import com.highlightcam.app.domain.GoalZone
+import com.highlightcam.app.domain.GoalZoneSet
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -10,13 +11,37 @@ class GoalEventAnalyzer
     constructor() {
         fun analyze(
             detections: List<Detection>,
-            goalZone: GoalZone,
+            goalZoneSet: GoalZoneSet,
+            sensitivity: Float,
+        ): AnalysisResult {
+            val resultA = analyzeForZone(detections, goalZoneSet.goalA, sensitivity)
+            val resultB = analyzeForZone(detections, goalZoneSet.goalB, sensitivity)
+
+            return when {
+                resultA.isCandidateEvent && resultB.isCandidateEvent ->
+                    if (resultA.confidence >= resultB.confidence) resultA else resultB
+                resultA.isCandidateEvent -> resultA
+                resultB.isCandidateEvent -> resultB
+                else ->
+                    AnalysisResult(
+                        isCandidateEvent = false,
+                        confidence = 0f,
+                        ballDetected = resultA.ballDetected || resultB.ballDetected,
+                        ballInZone = false,
+                        playerCountInZone = resultA.playerCountInZone + resultB.playerCountInZone,
+                        reason = "No event",
+                        goalZoneId = null,
+                    )
+            }
+        }
+
+        private fun analyzeForZone(
+            detections: List<Detection>,
+            zone: GoalZone,
             sensitivity: Float,
         ): AnalysisResult {
             val threshold = lerp(HIGH_CONF_THRESHOLD, LOW_CONF_THRESHOLD, sensitivity)
             val playerThreshold = threshold * PLAYER_THRESHOLD_FACTOR
-
-            val zoneBB = goalZone.toBoundingBox()
 
             val ballDetected = detections.any { it.classId == CLASS_SPORTS_BALL && it.confidence >= threshold }
 
@@ -24,40 +49,38 @@ class GoalEventAnalyzer
                 detections.any {
                     it.classId == CLASS_SPORTS_BALL &&
                         it.confidence >= threshold &&
-                        it.boundingBox.intersects(zoneBB)
+                        zone.containsPoint(it.boundingBox.centerX, it.boundingBox.centerY)
                 }
 
             val playerCountInZone =
                 detections.count {
                     it.classId == CLASS_PERSON &&
                         it.confidence >= playerThreshold &&
-                        it.boundingBox.intersects(zoneBB)
+                        zone.containsPoint(it.boundingBox.centerX, it.boundingBox.centerY)
                 }
 
             val isCandidateEvent = ballInZone || playerCountInZone >= PLAYER_CLUSTER_THRESHOLD
 
             val confidence =
                 when {
-                    ballInZone -> {
+                    ballInZone ->
                         detections
                             .filter {
                                 it.classId == CLASS_SPORTS_BALL &&
                                     it.confidence >= threshold &&
-                                    it.boundingBox.intersects(zoneBB)
+                                    zone.containsPoint(it.boundingBox.centerX, it.boundingBox.centerY)
                             }
                             .maxOf { it.confidence }
-                    }
-                    playerCountInZone >= PLAYER_CLUSTER_THRESHOLD -> {
+                    playerCountInZone >= PLAYER_CLUSTER_THRESHOLD ->
                         (playerCountInZone / 6f).coerceAtMost(1f)
-                    }
                     else -> 0f
                 }
 
             val reason =
                 when {
-                    ballInZone -> "Ball in zone (conf %.2f)".format(confidence)
+                    ballInZone -> "Ball in ${zone.label} (conf %.2f)".format(confidence)
                     playerCountInZone >= PLAYER_CLUSTER_THRESHOLD ->
-                        "Player cluster ($playerCountInZone players)"
+                        "Player cluster in ${zone.label} ($playerCountInZone players)"
                     else -> "No event"
                 }
 
@@ -68,6 +91,7 @@ class GoalEventAnalyzer
                 ballInZone = ballInZone,
                 playerCountInZone = playerCountInZone,
                 reason = reason,
+                goalZoneId = if (isCandidateEvent) zone.id else null,
             )
         }
 
@@ -86,11 +110,3 @@ class GoalEventAnalyzer
             ): Float = a + (b - a) * t.coerceIn(0f, 1f)
         }
     }
-
-private fun GoalZone.toBoundingBox() =
-    BoundingBox(
-        left = xFraction,
-        top = yFraction,
-        right = xFraction + widthFraction,
-        bottom = yFraction + heightFraction,
-    )

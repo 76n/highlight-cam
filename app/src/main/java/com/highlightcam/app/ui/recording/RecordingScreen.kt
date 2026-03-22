@@ -99,6 +99,7 @@ import com.highlightcam.app.R
 import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.detection.DebugInfo
 import com.highlightcam.app.domain.GoalZone
+import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecorderState
 import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.ui.setup.CameraEntryPoint
@@ -107,6 +108,7 @@ import kotlinx.coroutines.delay
 
 private val AmberColor = Color(0xFFFFB347)
 private val GreenColor = Color(0xFF00FF88)
+private val GoalBColor = Color(0xFF4FC3F7)
 
 @Suppress("LongMethod")
 @OptIn(ExperimentalPermissionsApi::class)
@@ -117,8 +119,9 @@ fun RecordingScreen(
 ) {
     val recorderState by viewModel.recorderState.collectAsState()
     val clipsSaved by viewModel.clipsSaved.collectAsState()
-    val goalZone by viewModel.goalZone.collectAsState()
+    val goalZoneSet by viewModel.goalZoneSet.collectAsState()
     val candidateDetected by viewModel.candidateDetected.collectAsState()
+    val candidateGoalZoneId by viewModel.candidateGoalZoneId.collectAsState()
     val modelAvailable by viewModel.modelAvailable.collectAsState()
     val debugMode by viewModel.debugModeEnabled.collectAsState()
     val debugInfo by viewModel.debugInfo.collectAsState()
@@ -137,10 +140,7 @@ fun RecordingScreen(
                 .cameraPreviewManager()
         }
 
-    val permissionsState =
-        rememberMultiplePermissionsState(
-            listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO),
-        )
+    val permissionsState = rememberMultiplePermissionsState(listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
     val allGranted = permissionsState.permissions.all { it.status.isGranted }
 
     DisposableEffect(Unit) {
@@ -157,70 +157,49 @@ fun RecordingScreen(
     LaunchedEffect(clipsSaved) {
         if (clipsSaved > 0) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                view.performHapticFeedback(
+                    HapticFeedbackConstants.CONFIRM,
+                )
             } else {
                 view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             }
             if (soundOnSave) {
                 try {
-                    val sound = MediaActionSound()
-                    sound.play(MediaActionSound.START_VIDEO_RECORDING)
+                    MediaActionSound().play(MediaActionSound.START_VIDEO_RECORDING)
                 } catch (_: Exception) {
                 }
             }
         }
     }
 
-    LaunchedEffect(candidateDetected) {
-        if (candidateDetected) {
-            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-        }
-    }
+    LaunchedEffect(candidateDetected) { if (candidateDetected) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
 
     LaunchedEffect(recorderState) {
-        if (recorderState is RecorderState.Error) {
-            snackbarHostState.showSnackbar((recorderState as RecorderState.Error).message)
-        }
+        if (recorderState is RecorderState.Error) snackbarHostState.showSnackbar((recorderState as RecorderState.Error).message)
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Color.Transparent,
-    ) { innerPadding ->
+    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }, containerColor = Color.Transparent) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             if (allGranted) {
                 RecordingContent(
-                    recorderState = recorderState,
-                    clipsSaved = clipsSaved,
-                    goalZone = goalZone,
-                    candidateDetected = candidateDetected,
-                    modelAvailable = modelAvailable,
-                    debugMode = debugMode,
-                    lowStorage = lowStorage,
+                    recorderState = recorderState, clipsSaved = clipsSaved, goalZoneSet = goalZoneSet,
+                    candidateDetected = candidateDetected, candidateGoalZoneId = candidateGoalZoneId,
+                    modelAvailable = modelAvailable, debugMode = debugMode, lowStorage = lowStorage,
                     cameraPreviewManager = cameraPreviewManager,
-                    onStartRecording = viewModel::startRecording,
-                    onStopRecording = viewModel::stopRecording,
+                    onStartRecording = viewModel::startRecording, onStopRecording = viewModel::stopRecording,
                     onManualSave = viewModel::requestManualSave,
                     onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
                     onNavigateToLibrary = { navController.navigate(Routes.LIBRARY) },
-                    onShowVisionDialog = { showVisionDialog = true },
-                    onShowDebugPanel = { showDebugPanel = true },
+                    onShowVisionDialog = { showVisionDialog = true }, onShowDebugPanel = { showDebugPanel = true },
                 )
             } else {
-                PermissionRequestScreen(
-                    onRequestPermissions = { permissionsState.launchMultiplePermissionRequest() },
-                )
+                PermissionRequestScreen(onRequestPermissions = { permissionsState.launchMultiplePermissionRequest() })
             }
         }
     }
 
-    if (showVisionDialog) {
-        VisionOffDialog(onDismiss = { showVisionDialog = false })
-    }
-
-    if (showDebugPanel && debugMode) {
-        DebugPanel(debugInfo = debugInfo, onDismiss = { showDebugPanel = false })
-    }
+    if (showVisionDialog) VisionOffDialog(onDismiss = { showVisionDialog = false })
+    if (showDebugPanel && debugMode) DebugPanel(debugInfo = debugInfo, onDismiss = { showDebugPanel = false })
 }
 
 @Suppress("LongParameterList", "LongMethod")
@@ -228,8 +207,9 @@ fun RecordingScreen(
 private fun RecordingContent(
     recorderState: RecorderState,
     clipsSaved: Int,
-    goalZone: GoalZone?,
+    goalZoneSet: GoalZoneSet?,
     candidateDetected: Boolean,
+    candidateGoalZoneId: String?,
     modelAvailable: Boolean,
     debugMode: Boolean,
     lowStorage: Boolean,
@@ -242,62 +222,45 @@ private fun RecordingContent(
     onShowVisionDialog: () -> Unit,
     onShowDebugPanel: () -> Unit,
 ) {
-    val isRecording =
-        recorderState is RecorderState.Recording || recorderState is RecorderState.SavingClip
+    val isRecording = recorderState is RecorderState.Recording || recorderState is RecorderState.SavingClip
     val isSaving = recorderState is RecorderState.SavingClip
     val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(isRecording) {
-        if (!isRecording) {
-            cameraPreviewManager.currentSurfaceProvider?.let { sp ->
-                cameraPreviewManager.bindToLifecycle(lifecycleOwner, sp)
-            }
-        }
+        if (!isRecording) cameraPreviewManager.currentSurfaceProvider?.let { cameraPreviewManager.bindToLifecycle(lifecycleOwner, it) }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         CameraPreview(cameraPreviewManager)
 
-        if (isRecording && goalZone != null) {
-            GoalZoneOverlay(zone = goalZone, isCandidate = candidateDetected)
+        if (isRecording && goalZoneSet != null) {
+            DualGoalZoneOverlay(
+                goalZoneSet = goalZoneSet,
+                candidateDetected = candidateDetected,
+                candidateGoalZoneId = candidateGoalZoneId,
+            )
         }
 
-        TopBar(
-            recorderState = recorderState,
-            onNavigateToSettings = onNavigateToSettings,
-            onNavigateToLibrary = onNavigateToLibrary,
-        )
+        TopBar(recorderState = recorderState, onNavigateToSettings = onNavigateToSettings, onNavigateToLibrary = onNavigateToLibrary)
 
         if (!modelAvailable && isRecording) {
             VisionOffBadge(
-                modifier =
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = 52.dp),
+                modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.statusBars).padding(top = 52.dp),
                 onClick = onShowVisionDialog,
             )
         }
-
         if (lowStorage && isRecording) {
             LowStorageBanner(
                 modifier =
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = if (!modelAvailable) 80.dp else 52.dp),
+                    Modifier.align(
+                        Alignment.TopCenter,
+                    ).windowInsetsPadding(WindowInsets.statusBars).padding(top = if (!modelAvailable) 80.dp else 52.dp),
             )
         }
-
         SavingBanner(visible = isSaving)
-
-        BottomControls(
-            isRecording = isRecording,
-            clipsSaved = clipsSaved,
-            onToggleRecording = { if (isRecording) onStopRecording() else onStartRecording() },
-            onManualSave = onManualSave,
-            onLongPressRecord = if (debugMode) onShowDebugPanel else null,
-        )
+        BottomControls(isRecording = isRecording, clipsSaved = clipsSaved, onToggleRecording = {
+            if (isRecording) onStopRecording() else onStartRecording()
+        }, onManualSave = onManualSave, onLongPressRecord = if (debugMode) onShowDebugPanel else null)
     }
 }
 
@@ -305,8 +268,10 @@ private fun RecordingContent(
 private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
     val lifecycleOwner = LocalLifecycleOwner.current
     AndroidView(
-        factory = { ctx ->
-            PreviewView(ctx).also { pv ->
+        factory = {
+                ctx ->
+            PreviewView(ctx).also {
+                    pv ->
                 pv.implementationMode = PreviewView.ImplementationMode.PERFORMANCE
                 cameraPreviewManager.setSurfaceProvider(pv.surfaceProvider)
             }
@@ -315,37 +280,53 @@ private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
         update = { pv -> cameraPreviewManager.setSurfaceProvider(pv.surfaceProvider) },
     )
     LaunchedEffect(lifecycleOwner) {
-        cameraPreviewManager.currentSurfaceProvider?.let { sp ->
-            cameraPreviewManager.bindToLifecycle(lifecycleOwner, sp)
-        }
+        cameraPreviewManager.currentSurfaceProvider?.let { cameraPreviewManager.bindToLifecycle(lifecycleOwner, it) }
     }
 }
 
 @Composable
-private fun GoalZoneOverlay(
-    zone: GoalZone,
-    isCandidate: Boolean,
+private fun DualGoalZoneOverlay(
+    goalZoneSet: GoalZoneSet,
+    candidateDetected: Boolean,
+    candidateGoalZoneId: String?,
 ) {
     val transition = rememberInfiniteTransition(label = "zone_shimmer")
-    val shimmerWidth by transition.animateFloat(
-        initialValue = 2f,
-        targetValue = 4f,
-        animationSpec = infiniteRepeatable(animation = tween(300), repeatMode = RepeatMode.Reverse),
-        label = "zone_stroke_width",
+    val shimmerWidth by transition.animateFloat(2f, 4f, infiniteRepeatable(tween(300), RepeatMode.Reverse), label = "zone_sw")
+
+    val goalACandidateActive = candidateDetected && candidateGoalZoneId == "a"
+    val goalBCandidateActive = candidateDetected && candidateGoalZoneId == "b"
+
+    val goalAColor by animateColorAsState(
+        if (goalACandidateActive) AmberColor else GreenColor.copy(alpha = 0.4f),
+        tween(200),
+        label = "za_c",
     )
-    val targetColor = if (isCandidate) AmberColor else GreenColor.copy(alpha = 0.4f)
-    val strokeColor by animateColorAsState(targetColor, tween(200), label = "zone_color")
-    val strokeDp = if (isCandidate) shimmerWidth else 1.5f
-    val strokeWidthPx = with(LocalDensity.current) { strokeDp.dp.toPx() }
+    val goalBColor by animateColorAsState(
+        if (goalBCandidateActive) AmberColor else GoalBColor.copy(alpha = 0.4f),
+        tween(200),
+        label = "zb_c",
+    )
+    val goalAStroke = if (goalACandidateActive) shimmerWidth else 1.5f
+    val goalBStroke = if (goalBCandidateActive) shimmerWidth else 1.5f
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        drawRoundRect(
-            color = strokeColor,
-            topLeft = Offset(zone.xFraction * size.width, zone.yFraction * size.height),
-            size = Size(zone.widthFraction * size.width, zone.heightFraction * size.height),
-            cornerRadius = CornerRadius(4.dp.toPx()),
-            style = Stroke(width = strokeWidthPx),
-        )
+        fun drawZonePath(
+            zone: GoalZone,
+            color: Color,
+            strokeDp: Float,
+        ) {
+            val pts = zone.toPoints()
+            if (pts.size < GoalZone.VERTEX_COUNT) return
+            val path =
+                Path().apply {
+                    moveTo(pts[0].x * size.width, pts[0].y * size.height)
+                    for (i in 1 until pts.size) lineTo(pts[i].x * size.width, pts[i].y * size.height)
+                    close()
+                }
+            drawPath(path, color, style = Stroke(width = strokeDp.dp.toPx()))
+        }
+        drawZonePath(goalZoneSet.goalA, goalAColor, goalAStroke)
+        drawZonePath(goalZoneSet.goalB, goalBColor, goalBStroke)
     }
 }
 
@@ -355,12 +336,9 @@ private fun VisionOffBadge(
     onClick: () -> Unit,
 ) {
     Box(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(AmberColor.copy(alpha = 0.2f))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier.clip(
+            RoundedCornerShape(16.dp),
+        ).background(AmberColor.copy(alpha = 0.2f)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Text(
             stringResource(R.string.recording_vision_off),
@@ -372,29 +350,18 @@ private fun VisionOffBadge(
 
 @Composable
 private fun LowStorageBanner(modifier: Modifier = Modifier) {
-    Box(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(AmberColor.copy(alpha = 0.2f))
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Text(
-            stringResource(R.string.recording_low_storage),
-            style = MaterialTheme.typography.labelSmall,
-            color = AmberColor,
-        )
+    Box(modifier.clip(RoundedCornerShape(16.dp)).background(AmberColor.copy(alpha = 0.2f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Text(stringResource(R.string.recording_low_storage), style = MaterialTheme.typography.labelSmall, color = AmberColor)
     }
 }
 
 @Composable
 private fun VisionOffDialog(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.recording_vision_off_title)) },
-        text = { Text(stringResource(R.string.recording_vision_off_body)) },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
-    )
+    AlertDialog(onDismissRequest = onDismiss, title = {
+        Text(stringResource(R.string.recording_vision_off_title))
+    }, text = {
+        Text(stringResource(R.string.recording_vision_off_body))
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } })
 }
 
 @Composable
@@ -406,13 +373,13 @@ private fun TopBar(
     val isRecording = recorderState is RecorderState.Recording
     val startedAt = (recorderState as? RecorderState.Recording)?.startedAt ?: 0L
     Row(
-        modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RecIndicator(isActive = isRecording)
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(Modifier.width(8.dp))
         ElapsedTimer(isRecording = isRecording, startedAt = startedAt)
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(Modifier.weight(1f))
         IconButton(onClick = onNavigateToSettings) {
             Icon(
                 ImageVector.vectorResource(R.drawable.ic_notification),
@@ -438,7 +405,7 @@ private fun RecIndicator(isActive: Boolean) {
     val alpha by transition.animateFloat(1f, 0.4f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "rec_alpha")
     val displayAlpha = if (isActive) alpha else 1f
     val dotColor = if (isActive) Color(0xFFFF3B3B) else Color.Gray
-    Box(modifier = Modifier.size(10.dp).drawBehind { drawCircle(dotColor.copy(alpha = displayAlpha), size.minDimension / 2f) })
+    Box(Modifier.size(10.dp).drawBehind { drawCircle(dotColor.copy(alpha = displayAlpha), size.minDimension / 2f) })
 }
 
 @Composable
@@ -457,10 +424,8 @@ private fun ElapsedTimer(
             elapsedSeconds = 0
         }
     }
-    val minutes = elapsedSeconds / 60
-    val seconds = elapsedSeconds % 60
     Text(
-        if (isRecording) "%02d:%02d".format(minutes, seconds) else stringResource(R.string.recording_timer_idle),
+        if (isRecording) "%02d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60) else stringResource(R.string.recording_timer_idle),
         style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 16.sp, letterSpacing = 0.05.sp),
         color = Color.White,
     )
@@ -470,8 +435,14 @@ private fun ElapsedTimer(
 private fun SavingBanner(visible: Boolean) {
     AnimatedVisibility(
         visible = visible,
-        enter = slideInVertically { -it } + fadeIn(),
-        exit = slideOutVertically { -it } + fadeOut(),
+        enter =
+            slideInVertically {
+                -it
+            } + fadeIn(),
+        exit =
+            slideOutVertically {
+                -it
+            } + fadeOut(),
         modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 56.dp),
     ) {
         Box(Modifier.fillMaxWidth().padding(horizontal = 48.dp), contentAlignment = Alignment.Center) {
@@ -647,7 +618,8 @@ private fun DebugRmsBar(
     }
 }
 
-@Composable private fun DebugChip(
+@Composable
+private fun DebugChip(
     label: String,
     active: Boolean,
 ) {
@@ -660,7 +632,8 @@ private fun DebugRmsBar(
     }
 }
 
-@Composable private fun DebugLabel(
+@Composable
+private fun DebugLabel(
     label: String,
     value: String,
 ) {
@@ -670,7 +643,8 @@ private fun DebugRmsBar(
     }
 }
 
-@Composable private fun InferenceSparkline(
+@Composable
+private fun InferenceSparkline(
     times: List<Long>,
     modifier: Modifier = Modifier,
 ) {
@@ -679,7 +653,10 @@ private fun DebugRmsBar(
         val maxTime = times.maxOrNull()?.toFloat()?.coerceAtLeast(1f) ?: return@Canvas
         val stepX = size.width / (times.size - 1)
         val path = Path()
-        times.forEachIndexed { i, time ->
+        times.forEachIndexed {
+                i,
+                time,
+            ->
             val x = i * stepX
             val y = size.height * (1f - time / maxTime)
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)

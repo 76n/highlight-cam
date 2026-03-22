@@ -5,75 +5,123 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GoalZoneTest {
+    private val square =
+        GoalZone(
+            id = "test",
+            label = "Test",
+            p1 = NormalizedPoint(0.2f, 0.2f),
+            p2 = NormalizedPoint(0.8f, 0.2f),
+            p3 = NormalizedPoint(0.8f, 0.8f),
+            p4 = NormalizedPoint(0.2f, 0.8f),
+        )
+
+    private val trapezoid =
+        GoalZone(
+            id = "trap",
+            label = "Trap",
+            p1 = NormalizedPoint(0.3f, 0.2f),
+            p2 = NormalizedPoint(0.7f, 0.2f),
+            p3 = NormalizedPoint(0.9f, 0.8f),
+            p4 = NormalizedPoint(0.1f, 0.8f),
+        )
+
+    private val skewedQuad =
+        GoalZone(
+            id = "skew",
+            label = "Skew",
+            p1 = NormalizedPoint(0.1f, 0.1f),
+            p2 = NormalizedPoint(0.6f, 0.2f),
+            p3 = NormalizedPoint(0.7f, 0.9f),
+            p4 = NormalizedPoint(0.05f, 0.7f),
+        )
+
     @Test
-    fun `FULL_FRAME intersects any zone inside it`() {
-        val inner = GoalZone(0.2f, 0.2f, 0.3f, 0.3f)
-        assertTrue(GoalZone.FULL_FRAME.intersects(inner))
-        assertTrue(inner.intersects(GoalZone.FULL_FRAME))
+    fun `point inside square returns true`() {
+        assertTrue(square.containsPoint(0.5f, 0.5f))
     }
 
     @Test
-    fun `identical zones intersect`() {
-        val zone = GoalZone(0.1f, 0.1f, 0.5f, 0.5f)
-        assertTrue(zone.intersects(zone))
+    fun `point outside square returns false`() {
+        assertFalse(square.containsPoint(0.1f, 0.1f))
     }
 
     @Test
-    fun `non-overlapping zones horizontally do not intersect`() {
-        val left = GoalZone(0.0f, 0.0f, 0.3f, 1.0f)
-        val right = GoalZone(0.5f, 0.0f, 0.3f, 1.0f)
-        assertFalse(left.intersects(right))
-        assertFalse(right.intersects(left))
+    fun `point on top edge returns true`() {
+        assertTrue(square.containsPoint(0.5f, 0.2f))
     }
 
     @Test
-    fun `non-overlapping zones vertically do not intersect`() {
-        val top = GoalZone(0.0f, 0.0f, 1.0f, 0.3f)
-        val bottom = GoalZone(0.0f, 0.5f, 1.0f, 0.3f)
-        assertFalse(top.intersects(bottom))
-        assertFalse(bottom.intersects(top))
+    fun `point on right edge returns true`() {
+        assertTrue(square.containsPoint(0.8f, 0.5f))
     }
 
     @Test
-    fun `edge-touching zones horizontally do not intersect`() {
-        val left = GoalZone(0.0f, 0.0f, 0.5f, 1.0f)
-        val right = GoalZone(0.5f, 0.0f, 0.5f, 1.0f)
-        assertFalse(left.intersects(right))
+    fun `point on bottom edge returns true`() {
+        assertTrue(square.containsPoint(0.5f, 0.8f))
     }
 
     @Test
-    fun `edge-touching zones vertically do not intersect`() {
-        val top = GoalZone(0.0f, 0.0f, 1.0f, 0.5f)
-        val bottom = GoalZone(0.0f, 0.5f, 1.0f, 0.5f)
-        assertFalse(top.intersects(bottom))
+    fun `point on left edge returns true`() {
+        assertTrue(square.containsPoint(0.2f, 0.5f))
     }
 
     @Test
-    fun `partial overlap zones intersect`() {
-        val a = GoalZone(0.0f, 0.0f, 0.6f, 0.6f)
-        val b = GoalZone(0.4f, 0.4f, 0.6f, 0.6f)
-        assertTrue(a.intersects(b))
-        assertTrue(b.intersects(a))
+    fun `point at corner returns true`() {
+        assertTrue(square.containsPoint(0.2f, 0.2f))
+        assertTrue(square.containsPoint(0.8f, 0.8f))
     }
 
     @Test
-    fun `zone fully contained inside another intersects`() {
-        val outer = GoalZone(0.0f, 0.0f, 1.0f, 1.0f)
-        val inner = GoalZone(0.3f, 0.3f, 0.1f, 0.1f)
-        assertTrue(outer.intersects(inner))
-        assertTrue(inner.intersects(outer))
+    fun `point inside trapezoid returns true`() {
+        assertTrue(trapezoid.containsPoint(0.5f, 0.5f))
     }
 
     @Test
-    fun `diagonal non-overlapping zones do not intersect`() {
-        val topLeft = GoalZone(0.0f, 0.0f, 0.3f, 0.3f)
-        val bottomRight = GoalZone(0.5f, 0.5f, 0.3f, 0.3f)
-        assertFalse(topLeft.intersects(bottomRight))
-        assertFalse(bottomRight.intersects(topLeft))
+    fun `point outside trapezoid narrow top returns false`() {
+        assertFalse(trapezoid.containsPoint(0.25f, 0.25f))
     }
 
     @Test
-    fun `FULL_FRAME self-intersects`() {
-        assertTrue(GoalZone.FULL_FRAME.intersects(GoalZone.FULL_FRAME))
+    fun `point inside trapezoid wide bottom returns true`() {
+        assertTrue(trapezoid.containsPoint(0.15f, 0.75f))
+    }
+
+    @Test
+    fun `point outside trapezoid left returns false`() {
+        assertFalse(trapezoid.containsPoint(0.05f, 0.5f))
+    }
+
+    @Test
+    fun `point inside skewed quad returns true`() {
+        assertTrue(skewedQuad.containsPoint(0.3f, 0.5f))
+    }
+
+    @Test
+    fun `point outside skewed quad returns false`() {
+        assertFalse(skewedQuad.containsPoint(0.9f, 0.1f))
+    }
+
+    @Test
+    fun `GOAL_A_DEFAULT containsPoint for its center`() {
+        val z = GoalZone.GOAL_A_DEFAULT
+        assertTrue(z.containsPoint(0.15f, 0.5f))
+    }
+
+    @Test
+    fun `GOAL_B_DEFAULT does not contain GOAL_A center`() {
+        assertFalse(GoalZone.GOAL_B_DEFAULT.containsPoint(0.15f, 0.5f))
+    }
+
+    @Test
+    fun `GOAL_B_DEFAULT containsPoint for its center`() {
+        assertTrue(GoalZone.GOAL_B_DEFAULT.containsPoint(0.85f, 0.5f))
+    }
+
+    @Test
+    fun `toPoints returns 4 points in order`() {
+        val pts = square.toPoints()
+        assert(pts.size == 4)
+        assert(pts[0] == NormalizedPoint(0.2f, 0.2f))
+        assert(pts[3] == NormalizedPoint(0.2f, 0.8f))
     }
 }

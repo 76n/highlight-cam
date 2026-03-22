@@ -3,7 +3,7 @@ package com.highlightcam.app.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.highlightcam.app.data.UserPreferencesRepository
-import com.highlightcam.app.domain.GoalZone
+import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecordingConfig
 import com.highlightcam.app.domain.VideoQuality
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,8 +27,8 @@ class SettingsViewModel
             userPreferencesRepository.recordingConfig
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), RecordingConfig())
 
-        val goalZone: StateFlow<GoalZone?> =
-            userPreferencesRepository.goalZone
+        val goalZoneSet: StateFlow<GoalZoneSet?> =
+            userPreferencesRepository.goalZoneSet
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), null)
 
         val debugMode: StateFlow<Boolean> =
@@ -46,26 +46,16 @@ class SettingsViewModel
         fun updateSecondsBefore(value: Int) {
             viewModelScope.launch {
                 val current = recordingConfig.value
-                userPreferencesRepository.updateRecordingConfig(
-                    current.copy(bufferSegments = value / current.segmentDurationSeconds),
-                )
+                userPreferencesRepository.updateRecordingConfig(current.copy(bufferSegments = value / current.segmentDurationSeconds))
             }
         }
 
         fun updateSecondsAfter(value: Int) {
-            viewModelScope.launch {
-                val current = recordingConfig.value
-                userPreferencesRepository.updateRecordingConfig(
-                    current.copy(secondsAfterEvent = value),
-                )
-            }
+            viewModelScope.launch { userPreferencesRepository.updateRecordingConfig(recordingConfig.value.copy(secondsAfterEvent = value)) }
         }
 
         fun updateQuality(quality: VideoQuality) {
-            viewModelScope.launch {
-                val current = recordingConfig.value
-                userPreferencesRepository.updateRecordingConfig(current.copy(videoQuality = quality))
-            }
+            viewModelScope.launch { userPreferencesRepository.updateRecordingConfig(recordingConfig.value.copy(videoQuality = quality)) }
         }
 
         fun updateDebugMode(enabled: Boolean) {

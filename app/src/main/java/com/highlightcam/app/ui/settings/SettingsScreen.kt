@@ -46,9 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
@@ -61,6 +58,7 @@ import androidx.navigation.NavController
 import com.highlightcam.app.BuildConfig
 import com.highlightcam.app.R
 import com.highlightcam.app.domain.GoalZone
+import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.VideoQuality
 import com.highlightcam.app.navigation.Routes
 import kotlinx.coroutines.launch
@@ -75,7 +73,7 @@ fun SettingsScreen(
 ) {
     val sensitivity by viewModel.sensitivity.collectAsState()
     val config by viewModel.recordingConfig.collectAsState()
-    val goalZone by viewModel.goalZone.collectAsState()
+    val goalZoneSet by viewModel.goalZoneSet.collectAsState()
     val debugMode by viewModel.debugMode.collectAsState()
     val soundOnSave by viewModel.soundOnSave.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -203,7 +201,7 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    GoalZonePreview(zone = goalZone, modifier = Modifier.width(120.dp))
+                    GoalZoneSetPreview(zoneSet = goalZoneSet, modifier = Modifier.width(120.dp))
                     Spacer(modifier = Modifier.weight(1f))
                     TextButton(
                         onClick = {
@@ -374,9 +372,11 @@ private fun LabeledSlider(
     }
 }
 
+private val GoalBColor = Color(0xFF4FC3F7)
+
 @Composable
-private fun GoalZonePreview(
-    zone: GoalZone?,
+private fun GoalZoneSetPreview(
+    zoneSet: GoalZoneSet?,
     modifier: Modifier = Modifier,
 ) {
     androidx.compose.foundation.Canvas(
@@ -386,14 +386,23 @@ private fun GoalZonePreview(
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFF1A1A1A)),
     ) {
-        if (zone != null) {
-            drawRoundRect(
-                color = GreenColor,
-                topLeft = Offset(zone.xFraction * size.width, zone.yFraction * size.height),
-                size = Size(zone.widthFraction * size.width, zone.heightFraction * size.height),
-                cornerRadius = CornerRadius(2.dp.toPx()),
-                style = Stroke(width = 2.dp.toPx()),
-            )
+        fun drawZone(
+            zone: GoalZone,
+            color: Color,
+        ) {
+            val pts = zone.toPoints()
+            if (pts.size < GoalZone.VERTEX_COUNT) return
+            val path =
+                androidx.compose.ui.graphics.Path().apply {
+                    moveTo(pts[0].x * size.width, pts[0].y * size.height)
+                    for (i in 1 until pts.size) lineTo(pts[i].x * size.width, pts[i].y * size.height)
+                    close()
+                }
+            drawPath(path, color, style = Stroke(width = 2.dp.toPx()))
+        }
+        if (zoneSet != null) {
+            drawZone(zoneSet.goalA, GreenColor)
+            drawZone(zoneSet.goalB, GoalBColor)
         }
     }
 }

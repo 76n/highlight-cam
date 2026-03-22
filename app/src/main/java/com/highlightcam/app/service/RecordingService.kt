@@ -18,7 +18,7 @@ import com.highlightcam.app.data.SessionRepository
 import com.highlightcam.app.data.UserPreferencesRepository
 import com.highlightcam.app.detection.HighlightDetectionEngine
 import com.highlightcam.app.domain.DetectionEvent
-import com.highlightcam.app.domain.GoalZone
+import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecorderState
 import com.highlightcam.app.domain.RecordingConfig
 import com.highlightcam.app.domain.VideoQuality
@@ -53,54 +53,41 @@ class RecordingService : LifecycleService() {
         startId: Int,
     ): Int {
         super.onStartCommand(intent, flags, startId)
-
         when (intent?.action) {
             ACTION_START -> handleStart(intent)
             ACTION_STOP -> handleStop()
             ACTION_SAVE_CLIP -> handleSaveClip(intent)
         }
-
         return START_STICKY
     }
 
     @android.annotation.SuppressLint("InlinedApi")
     private fun handleStart(intent: Intent) {
         val qualityName = intent.getStringExtra(EXTRA_QUALITY) ?: VideoQuality.HD_720.name
-        val quality =
-            runCatching { VideoQuality.valueOf(qualityName) }
-                .getOrDefault(VideoQuality.HD_720)
+        val quality = runCatching { VideoQuality.valueOf(qualityName) }.getOrDefault(VideoQuality.HD_720)
 
         createNotificationChannel()
-        val notification = buildNotification()
-
         ServiceCompat.startForeground(
             this,
             NOTIFICATION_ID,
-            notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+            buildNotification(),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
         )
-
         acquireWakeLock()
 
         lifecycleScope.launch {
             try {
-                val config =
-                    userPreferencesRepository.recordingConfig.first().copy(
-                        videoQuality = quality,
-                    )
+                val config = userPreferencesRepository.recordingConfig.first().copy(videoQuality = quality)
                 circularBufferRecorder.start(config, this@RecordingService)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to start recording")
-                sessionRepository.updateRecorderState(
-                    RecorderState.Error(e.message ?: "Recording failed"),
-                )
+                sessionRepository.updateRecorderState(RecorderState.Error(e.message ?: "Recording failed"))
             }
         }
 
         lifecycleScope.launch {
-            val goalZone = sessionRepository.goalZone.value ?: GoalZone.FULL_FRAME
-            highlightDetectionEngine.start(goalZone)
+            val zoneSet = sessionRepository.goalZoneSet.value ?: GoalZoneSet.DEFAULT
+            highlightDetectionEngine.start(zoneSet)
         }
 
         detectionJob =
@@ -111,23 +98,15 @@ class RecordingService : LifecycleService() {
                             is DetectionEvent.ClipSaveTriggered -> {
                                 try {
                                     val config = userPreferencesRepository.recordingConfig.first()
-                                    val result =
-                                        circularBufferRecorder.saveClip(
-                                            config.totalBufferSeconds,
-                                            config.secondsAfterEvent,
-                                        )
+                                    val result = circularBufferRecorder.saveClip(config.totalBufferSeconds, config.secondsAfterEvent)
                                     _clipResultFlow.tryEmit(result)
-                                    result.onFailure { e ->
-                                        Timber.e(e, "Auto-save clip failed")
-                                    }
+                                    result.onFailure { e -> Timber.e(e, "Auto-save clip failed") }
                                 } catch (e: Exception) {
                                     Timber.e(e, "Error during auto-save")
                                 }
                             }
                             is DetectionEvent.CandidateDetected -> {}
-                            is DetectionEvent.DetectionError -> {
-                                Timber.e("Detection error: %s", event.message)
-                            }
+                            is DetectionEvent.DetectionError -> Timber.e("Detection error: %s", event.message)
                         }
                     }
                 } catch (e: Exception) {
@@ -158,30 +137,21 @@ class RecordingService : LifecycleService() {
     }
 
     private fun handleSaveClip(intent: Intent) {
-        val secondsBefore =
-            intent.getIntExtra(EXTRA_SECONDS_BEFORE, RecordingConfig().totalBufferSeconds)
-        val secondsAfter =
-            intent.getIntExtra(EXTRA_SECONDS_AFTER, RecordingConfig().secondsAfterEvent)
-
+        val secondsBefore = intent.getIntExtra(EXTRA_SECONDS_BEFORE, RecordingConfig().totalBufferSeconds)
+        val secondsAfter = intent.getIntExtra(EXTRA_SECONDS_AFTER, RecordingConfig().secondsAfterEvent)
         lifecycleScope.launch {
             val result = circularBufferRecorder.saveClip(secondsBefore, secondsAfter)
             _clipResultFlow.tryEmit(result)
-
             result.onFailure { e ->
                 Timber.e(e, "Failed to save clip")
-                sessionRepository.updateRecorderState(
-                    RecorderState.Error(e.message ?: "Clip save failed"),
-                )
+                sessionRepository.updateRecorderState(RecorderState.Error(e.message ?: "Clip save failed"))
             }
         }
     }
 
     private fun acquireWakeLock() {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock =
-            pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "HighlightCam::Recording").apply {
-                acquire()
-            }
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "HighlightCam::Recording").apply { acquire() }
     }
 
     @Suppress("MagicNumber")
@@ -192,15 +162,10 @@ class RecordingService : LifecycleService() {
 
     private fun createNotificationChannel() {
         val channel =
-            NotificationChannel(
-                CHANNEL_ID,
-                "Recording",
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply {
+            NotificationChannel(CHANNEL_ID, "Recording", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Active recording notification"
             }
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(channel)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
@@ -213,14 +178,14 @@ class RecordingService : LifecycleService() {
                 },
                 PendingIntent.FLAG_IMMUTABLE,
             )
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(getString(R.string.notification_recording_title))
-            .setContentText(getString(R.string.notification_recording_text))
-            .setOngoing(true)
-            .setContentIntent(pendingIntent)
-            .build()
+        return NotificationCompat.Builder(
+            this,
+            CHANNEL_ID,
+        ).setSmallIcon(
+            R.drawable.ic_notification,
+        ).setContentTitle(
+            getString(R.string.notification_recording_title),
+        ).setContentText(getString(R.string.notification_recording_text)).setOngoing(true).setContentIntent(pendingIntent).build()
     }
 
     override fun onDestroy() {
@@ -235,15 +200,9 @@ class RecordingService : LifecycleService() {
         const val EXTRA_QUALITY = "extra_quality"
         const val EXTRA_SECONDS_BEFORE = "extra_seconds_before"
         const val EXTRA_SECONDS_AFTER = "extra_seconds_after"
-
         private const val CHANNEL_ID = "hc_recording_channel"
         private const val NOTIFICATION_ID = 1001
-
-        private val _clipResultFlow =
-            MutableSharedFlow<Result<Uri>>(
-                extraBufferCapacity = 1,
-                onBufferOverflow = BufferOverflow.DROP_OLDEST,
-            )
+        private val _clipResultFlow = MutableSharedFlow<Result<Uri>>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
         val clipResultFlow: SharedFlow<Result<Uri>> = _clipResultFlow.asSharedFlow()
     }
 }

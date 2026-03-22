@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.highlightcam.app.domain.GoalZone
+import com.highlightcam.app.domain.GoalZoneSet
+import com.highlightcam.app.domain.NormalizedPoint
 import com.highlightcam.app.domain.RecordingConfig
 import com.highlightcam.app.domain.VideoQuality
 import kotlinx.coroutines.flow.Flow
@@ -22,10 +24,22 @@ class UserPreferencesRepository
         private val dataStore: DataStore<Preferences>,
     ) {
         private object Keys {
-            val GOAL_ZONE_X = floatPreferencesKey("goal_zone_x")
-            val GOAL_ZONE_Y = floatPreferencesKey("goal_zone_y")
-            val GOAL_ZONE_W = floatPreferencesKey("goal_zone_w")
-            val GOAL_ZONE_H = floatPreferencesKey("goal_zone_h")
+            val GOAL_A_P1_X = floatPreferencesKey("goal_a_p1_x")
+            val GOAL_A_P1_Y = floatPreferencesKey("goal_a_p1_y")
+            val GOAL_A_P2_X = floatPreferencesKey("goal_a_p2_x")
+            val GOAL_A_P2_Y = floatPreferencesKey("goal_a_p2_y")
+            val GOAL_A_P3_X = floatPreferencesKey("goal_a_p3_x")
+            val GOAL_A_P3_Y = floatPreferencesKey("goal_a_p3_y")
+            val GOAL_A_P4_X = floatPreferencesKey("goal_a_p4_x")
+            val GOAL_A_P4_Y = floatPreferencesKey("goal_a_p4_y")
+            val GOAL_B_P1_X = floatPreferencesKey("goal_b_p1_x")
+            val GOAL_B_P1_Y = floatPreferencesKey("goal_b_p1_y")
+            val GOAL_B_P2_X = floatPreferencesKey("goal_b_p2_x")
+            val GOAL_B_P2_Y = floatPreferencesKey("goal_b_p2_y")
+            val GOAL_B_P3_X = floatPreferencesKey("goal_b_p3_x")
+            val GOAL_B_P3_Y = floatPreferencesKey("goal_b_p3_y")
+            val GOAL_B_P4_X = floatPreferencesKey("goal_b_p4_x")
+            val GOAL_B_P4_Y = floatPreferencesKey("goal_b_p4_y")
             val SEGMENT_DURATION = intPreferencesKey("segment_duration")
             val BUFFER_SEGMENTS = intPreferencesKey("buffer_segments")
             val SECONDS_AFTER_EVENT = intPreferencesKey("seconds_after_event")
@@ -35,17 +49,45 @@ class UserPreferencesRepository
             val SOUND_ON_SAVE = booleanPreferencesKey("sound_on_save")
         }
 
-        val goalZone: Flow<GoalZone?> =
+        val goalZoneSet: Flow<GoalZoneSet?> =
             dataStore.data.map { prefs ->
-                val x = prefs[Keys.GOAL_ZONE_X]
-                val y = prefs[Keys.GOAL_ZONE_Y]
-                val w = prefs[Keys.GOAL_ZONE_W]
-                val h = prefs[Keys.GOAL_ZONE_H]
-                if (x != null && y != null && w != null && h != null) {
-                    GoalZone(x, y, w, h)
-                } else {
-                    null
-                }
+                val a1x = prefs[Keys.GOAL_A_P1_X] ?: return@map null
+                val a1y = prefs[Keys.GOAL_A_P1_Y] ?: return@map null
+                val a2x = prefs[Keys.GOAL_A_P2_X] ?: return@map null
+                val a2y = prefs[Keys.GOAL_A_P2_Y] ?: return@map null
+                val a3x = prefs[Keys.GOAL_A_P3_X] ?: return@map null
+                val a3y = prefs[Keys.GOAL_A_P3_Y] ?: return@map null
+                val a4x = prefs[Keys.GOAL_A_P4_X] ?: return@map null
+                val a4y = prefs[Keys.GOAL_A_P4_Y] ?: return@map null
+                val b1x = prefs[Keys.GOAL_B_P1_X] ?: return@map null
+                val b1y = prefs[Keys.GOAL_B_P1_Y] ?: return@map null
+                val b2x = prefs[Keys.GOAL_B_P2_X] ?: return@map null
+                val b2y = prefs[Keys.GOAL_B_P2_Y] ?: return@map null
+                val b3x = prefs[Keys.GOAL_B_P3_X] ?: return@map null
+                val b3y = prefs[Keys.GOAL_B_P3_Y] ?: return@map null
+                val b4x = prefs[Keys.GOAL_B_P4_X] ?: return@map null
+                val b4y = prefs[Keys.GOAL_B_P4_Y] ?: return@map null
+
+                GoalZoneSet(
+                    goalA =
+                        GoalZone(
+                            id = "a",
+                            label = "Goal A",
+                            p1 = NormalizedPoint(a1x, a1y),
+                            p2 = NormalizedPoint(a2x, a2y),
+                            p3 = NormalizedPoint(a3x, a3y),
+                            p4 = NormalizedPoint(a4x, a4y),
+                        ),
+                    goalB =
+                        GoalZone(
+                            id = "b",
+                            label = "Goal B",
+                            p1 = NormalizedPoint(b1x, b1y),
+                            p2 = NormalizedPoint(b2x, b2y),
+                            p3 = NormalizedPoint(b3x, b3y),
+                            p4 = NormalizedPoint(b4x, b4y),
+                        ),
+                )
             }
 
         val recordingConfig: Flow<RecordingConfig> =
@@ -61,27 +103,30 @@ class UserPreferencesRepository
                 )
             }
 
-        val debugModeEnabled: Flow<Boolean> =
-            dataStore.data.map { prefs ->
-                prefs[Keys.DEBUG_MODE] ?: false
-            }
+        val debugModeEnabled: Flow<Boolean> = dataStore.data.map { it[Keys.DEBUG_MODE] ?: false }
+        val detectionSensitivity: Flow<Float> = dataStore.data.map { it[Keys.DETECTION_SENSITIVITY] ?: 0.5f }
+        val soundOnSave: Flow<Boolean> = dataStore.data.map { it[Keys.SOUND_ON_SAVE] ?: true }
 
-        val detectionSensitivity: Flow<Float> =
-            dataStore.data.map { prefs ->
-                prefs[Keys.DETECTION_SENSITIVITY] ?: 0.5f
-            }
-
-        val soundOnSave: Flow<Boolean> =
-            dataStore.data.map { prefs ->
-                prefs[Keys.SOUND_ON_SAVE] ?: true
-            }
-
-        suspend fun updateGoalZone(zone: GoalZone) {
+        suspend fun updateGoalZoneSet(zoneSet: GoalZoneSet) {
             dataStore.edit { prefs ->
-                prefs[Keys.GOAL_ZONE_X] = zone.xFraction
-                prefs[Keys.GOAL_ZONE_Y] = zone.yFraction
-                prefs[Keys.GOAL_ZONE_W] = zone.widthFraction
-                prefs[Keys.GOAL_ZONE_H] = zone.heightFraction
+                val a = zoneSet.goalA
+                prefs[Keys.GOAL_A_P1_X] = a.p1.x
+                prefs[Keys.GOAL_A_P1_Y] = a.p1.y
+                prefs[Keys.GOAL_A_P2_X] = a.p2.x
+                prefs[Keys.GOAL_A_P2_Y] = a.p2.y
+                prefs[Keys.GOAL_A_P3_X] = a.p3.x
+                prefs[Keys.GOAL_A_P3_Y] = a.p3.y
+                prefs[Keys.GOAL_A_P4_X] = a.p4.x
+                prefs[Keys.GOAL_A_P4_Y] = a.p4.y
+                val b = zoneSet.goalB
+                prefs[Keys.GOAL_B_P1_X] = b.p1.x
+                prefs[Keys.GOAL_B_P1_Y] = b.p1.y
+                prefs[Keys.GOAL_B_P2_X] = b.p2.x
+                prefs[Keys.GOAL_B_P2_Y] = b.p2.y
+                prefs[Keys.GOAL_B_P3_X] = b.p3.x
+                prefs[Keys.GOAL_B_P3_Y] = b.p3.y
+                prefs[Keys.GOAL_B_P4_X] = b.p4.x
+                prefs[Keys.GOAL_B_P4_Y] = b.p4.y
             }
         }
 
@@ -95,20 +140,14 @@ class UserPreferencesRepository
         }
 
         suspend fun updateDebugMode(enabled: Boolean) {
-            dataStore.edit { prefs ->
-                prefs[Keys.DEBUG_MODE] = enabled
-            }
+            dataStore.edit { it[Keys.DEBUG_MODE] = enabled }
         }
 
         suspend fun updateDetectionSensitivity(sensitivity: Float) {
-            dataStore.edit { prefs ->
-                prefs[Keys.DETECTION_SENSITIVITY] = sensitivity
-            }
+            dataStore.edit { it[Keys.DETECTION_SENSITIVITY] = sensitivity }
         }
 
         suspend fun updateSoundOnSave(enabled: Boolean) {
-            dataStore.edit { prefs ->
-                prefs[Keys.SOUND_ON_SAVE] = enabled
-            }
+            dataStore.edit { it[Keys.SOUND_ON_SAVE] = enabled }
         }
     }

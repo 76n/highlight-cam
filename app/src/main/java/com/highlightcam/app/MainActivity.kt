@@ -26,15 +26,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             HighlightCamTheme {
                 val startRoute by produceState<String?>(initialValue = null) {
-                    val zone = userPreferencesRepository.goalZone.first()
-                    value = if (zone == null) Routes.SETUP else Routes.RECORDING
+                    val zoneSet = userPreferencesRepository.goalZoneSet.first()
+                    value = if (zoneSet == null) Routes.SETUP else Routes.RECORDING
                 }
                 startRoute?.let { route ->
                     val navController = rememberNavController()
-                    HCNavHost(
-                        navController = navController,
-                        startDestination = route,
-                    )
+                    HCNavHost(navController = navController, startDestination = route)
                 }
             }
         }

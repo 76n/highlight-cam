@@ -4,7 +4,7 @@ import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.data.SessionRepository
 import com.highlightcam.app.data.UserPreferencesRepository
 import com.highlightcam.app.domain.DetectionEvent
-import com.highlightcam.app.domain.GoalZone
+import com.highlightcam.app.domain.GoalZoneSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,7 +35,7 @@ class HighlightDetectionEngine
     ) {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private var collectionJob: Job? = null
-        private var goalZone: GoalZone = GoalZone.FULL_FRAME
+        private var goalZoneSet: GoalZoneSet = GoalZoneSet.DEFAULT
         val stateMachine = DetectionStateMachine()
 
         private val _eventFlow =
@@ -50,8 +50,8 @@ class HighlightDetectionEngine
 
         private val recentInferenceTimes = ArrayDeque<Long>(MAX_INFERENCE_HISTORY)
 
-        fun start(goalZone: GoalZone) {
-            this.goalZone = goalZone
+        fun start(goalZoneSet: GoalZoneSet) {
+            this.goalZoneSet = goalZoneSet
             stateMachine.start()
             audioAnalyzer.start()
 
@@ -76,14 +76,13 @@ class HighlightDetectionEngine
                 try {
                     val detections = tfliteDetector.detect(bitmap)
                     val sensitivity = userPreferencesRepository.detectionSensitivity.first()
-                    val result = goalEventAnalyzer.analyze(detections, goalZone, sensitivity)
+                    val result = goalEventAnalyzer.analyze(detections, goalZoneSet, sensitivity)
 
                     trackInferenceTime(tfliteDetector.lastInferenceTimeMs)
                     updateDebugVisual(result)
 
-                    val action =
-                        stateMachine.onVisualResult(result, System.currentTimeMillis())
-                    handleAction(action)
+                    val action = stateMachine.onVisualResult(result, System.currentTimeMillis())
+                    handleAction(action, result.goalZoneId)
                 } catch (e: Exception) {
                     Timber.e(e, "Frame processing error")
                     _eventFlow.tryEmit(
@@ -99,24 +98,31 @@ class HighlightDetectionEngine
                 updateDebugAudio(event)
 
                 val action = stateMachine.onAudioEvent(event, System.currentTimeMillis())
-                handleAction(action)
+                handleAction(action, null)
             }
         }
 
-        private fun handleAction(action: DetectionAction) {
+        private fun handleAction(
+            action: DetectionAction,
+            goalZoneId: String?,
+        ) {
             when (action) {
                 is DetectionAction.TriggerSave -> {
                     _eventFlow.tryEmit(
                         DetectionEvent.ClipSaveTriggered(
                             confidence = action.confidence,
                             reason = action.reason,
+                            goalZoneId = goalZoneId,
                         ),
                     )
                     updateDebugEvent(action.reason)
                 }
                 is DetectionAction.EmitCandidate -> {
                     _eventFlow.tryEmit(
-                        DetectionEvent.CandidateDetected(confidence = action.confidence),
+                        DetectionEvent.CandidateDetected(
+                            confidence = action.confidence,
+                            goalZoneId = goalZoneId,
+                        ),
                     )
                 }
                 is DetectionAction.None -> {}
@@ -129,9 +135,7 @@ class HighlightDetectionEngine
         }
 
         private fun trackInferenceTime(ms: Long) {
-            if (recentInferenceTimes.size >= MAX_INFERENCE_HISTORY) {
-                recentInferenceTimes.removeFirst()
-            }
+            if (recentInferenceTimes.size >= MAX_INFERENCE_HISTORY) recentInferenceTimes.removeFirst()
             recentInferenceTimes.addLast(ms)
         }
 
@@ -146,19 +150,11 @@ class HighlightDetectionEngine
         }
 
         private fun updateDebugAudio(event: AudioEvent) {
-            _debugInfo.value =
-                _debugInfo.value.copy(
-                    currentRms = event.currentRms,
-                    baselineRms = event.baselineRms,
-                )
+            _debugInfo.value = _debugInfo.value.copy(currentRms = event.currentRms, baselineRms = event.baselineRms)
         }
 
         private fun updateDebugEvent(reason: String) {
-            _debugInfo.value =
-                _debugInfo.value.copy(
-                    lastEventTime = System.currentTimeMillis(),
-                    lastEventReason = reason,
-                )
+            _debugInfo.value = _debugInfo.value.copy(lastEventTime = System.currentTimeMillis(), lastEventReason = reason)
         }
 
         companion object {

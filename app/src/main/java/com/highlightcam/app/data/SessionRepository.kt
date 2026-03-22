@@ -1,6 +1,6 @@
 package com.highlightcam.app.data
 
-import com.highlightcam.app.domain.GoalZone
+import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecorderState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,8 +15,8 @@ class SessionRepository
         private val _recorderState = MutableStateFlow<RecorderState>(RecorderState.Idle)
         val recorderState: StateFlow<RecorderState> = _recorderState.asStateFlow()
 
-        private val _goalZone = MutableStateFlow<GoalZone?>(null)
-        val goalZone: StateFlow<GoalZone?> = _goalZone.asStateFlow()
+        private val _goalZoneSet = MutableStateFlow<GoalZoneSet?>(null)
+        val goalZoneSet: StateFlow<GoalZoneSet?> = _goalZoneSet.asStateFlow()
 
         private val _clipsSavedThisSession = MutableStateFlow(0)
         val clipsSavedThisSession: StateFlow<Int> = _clipsSavedThisSession.asStateFlow()
@@ -29,7 +29,7 @@ class SessionRepository
             _clipsSavedThisSession.value++
         }
 
-        fun setGoalZone(zone: GoalZone) {
-            _goalZone.value = zone
+        fun setGoalZoneSet(zoneSet: GoalZoneSet) {
+            _goalZoneSet.value = zoneSet
         }
     }

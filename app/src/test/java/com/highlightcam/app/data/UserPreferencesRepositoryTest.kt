@@ -4,6 +4,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import com.highlightcam.app.domain.GoalZone
+import com.highlightcam.app.domain.GoalZoneSet
+import com.highlightcam.app.domain.NormalizedPoint
 import com.highlightcam.app.domain.RecordingConfig
 import com.highlightcam.app.domain.VideoQuality
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -42,26 +44,71 @@ class UserPreferencesRepositoryTest {
     }
 
     @Test
-    fun `goalZone is null by default`() =
+    fun `goalZoneSet is null by default`() =
         testScope.runTest {
-            assertNull(repo.goalZone.first())
+            assertNull(repo.goalZoneSet.first())
         }
 
     @Test
-    fun `goalZone round-trip`() =
+    fun `goalZoneSet round-trip`() =
         testScope.runTest {
-            val zone = GoalZone(0.1f, 0.2f, 0.3f, 0.4f)
-            repo.updateGoalZone(zone)
-            assertEquals(zone, repo.goalZone.first())
+            val zoneSet =
+                GoalZoneSet(
+                    goalA =
+                        GoalZone(
+                            "a",
+                            "Goal A",
+                            NormalizedPoint(0.1f, 0.2f),
+                            NormalizedPoint(0.3f, 0.2f),
+                            NormalizedPoint(0.3f, 0.6f),
+                            NormalizedPoint(0.1f, 0.6f),
+                        ),
+                    goalB =
+                        GoalZone(
+                            "b",
+                            "Goal B",
+                            NormalizedPoint(0.7f, 0.2f),
+                            NormalizedPoint(0.9f, 0.2f),
+                            NormalizedPoint(0.9f, 0.6f),
+                            NormalizedPoint(0.7f, 0.6f),
+                        ),
+                )
+            repo.updateGoalZoneSet(zoneSet)
+            val saved = repo.goalZoneSet.first()!!
+            assertEquals(0.1f, saved.goalA.p1.x, 0.001f)
+            assertEquals(0.2f, saved.goalA.p1.y, 0.001f)
+            assertEquals(0.9f, saved.goalB.p2.x, 0.001f)
         }
 
     @Test
-    fun `goalZone overwrites previous value`() =
+    fun `goalZoneSet overwrites previous value`() =
         testScope.runTest {
-            repo.updateGoalZone(GoalZone(0.1f, 0.1f, 0.5f, 0.5f))
-            val updated = GoalZone(0.9f, 0.9f, 0.1f, 0.1f)
-            repo.updateGoalZone(updated)
-            assertEquals(updated, repo.goalZone.first())
+            repo.updateGoalZoneSet(GoalZoneSet.DEFAULT)
+            val updated =
+                GoalZoneSet(
+                    goalA =
+                        GoalZone(
+                            "a",
+                            "Goal A",
+                            NormalizedPoint(0.0f, 0.0f),
+                            NormalizedPoint(0.5f, 0.0f),
+                            NormalizedPoint(0.5f, 0.5f),
+                            NormalizedPoint(0.0f, 0.5f),
+                        ),
+                    goalB =
+                        GoalZone(
+                            "b",
+                            "Goal B",
+                            NormalizedPoint(0.5f, 0.5f),
+                            NormalizedPoint(1.0f, 0.5f),
+                            NormalizedPoint(1.0f, 1.0f),
+                            NormalizedPoint(0.5f, 1.0f),
+                        ),
+                )
+            repo.updateGoalZoneSet(updated)
+            val saved = repo.goalZoneSet.first()!!
+            assertEquals(0.0f, saved.goalA.p1.x, 0.001f)
+            assertEquals(1.0f, saved.goalB.p3.x, 0.001f)
         }
 
     @Test

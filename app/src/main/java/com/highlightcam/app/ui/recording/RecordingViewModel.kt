@@ -13,7 +13,7 @@ import com.highlightcam.app.detection.DebugInfo
 import com.highlightcam.app.detection.HighlightDetectionEngine
 import com.highlightcam.app.detection.TFLiteDetector
 import com.highlightcam.app.domain.DetectionEvent
-import com.highlightcam.app.domain.GoalZone
+import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecorderState
 import com.highlightcam.app.service.RecordingService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,7 +41,7 @@ class RecordingViewModel
     ) : ViewModel() {
         val recorderState: StateFlow<RecorderState> = sessionRepository.recorderState
         val clipsSaved: StateFlow<Int> = sessionRepository.clipsSavedThisSession
-        val goalZone: StateFlow<GoalZone?> = sessionRepository.goalZone
+        val goalZoneSet: StateFlow<GoalZoneSet?> = sessionRepository.goalZoneSet
         val modelAvailable: StateFlow<Boolean> = tfliteDetector.modelAvailable
         val debugInfo: StateFlow<DebugInfo> = highlightDetectionEngine.debugInfo
 
@@ -59,6 +59,9 @@ class RecordingViewModel
         private val _candidateDetected = MutableStateFlow(false)
         val candidateDetected: StateFlow<Boolean> = _candidateDetected.asStateFlow()
 
+        private val _candidateGoalZoneId = MutableStateFlow<String?>(null)
+        val candidateGoalZoneId: StateFlow<String?> = _candidateGoalZoneId.asStateFlow()
+
         private val _lowStorageWarning = MutableStateFlow(false)
         val lowStorageWarning: StateFlow<Boolean> = _lowStorageWarning.asStateFlow()
 
@@ -72,19 +75,21 @@ class RecordingViewModel
             }
 
             viewModelScope.launch {
-                val zone = userPreferencesRepository.goalZone.first()
-                if (zone != null) sessionRepository.setGoalZone(zone)
+                val zoneSet = userPreferencesRepository.goalZoneSet.first()
+                if (zoneSet != null) sessionRepository.setGoalZoneSet(zoneSet)
             }
 
             viewModelScope.launch {
                 highlightDetectionEngine.eventFlow.collect { event ->
                     if (event is DetectionEvent.CandidateDetected) {
                         _candidateDetected.value = true
+                        _candidateGoalZoneId.value = event.goalZoneId
                         candidateTimeoutJob?.cancel()
                         candidateTimeoutJob =
                             viewModelScope.launch {
                                 delay(CANDIDATE_DISPLAY_MS)
                                 _candidateDetected.value = false
+                                _candidateGoalZoneId.value = null
                             }
                     }
                 }
@@ -101,7 +106,6 @@ class RecordingViewModel
                 } catch (_: Exception) {
                     _lowStorageWarning.value = false
                 }
-
                 val config = userPreferencesRepository.recordingConfig.first()
                 val intent =
                     Intent(appContext, RecordingService::class.java).apply {
@@ -114,23 +118,19 @@ class RecordingViewModel
 
         fun stopRecording() {
             _lowStorageWarning.value = false
-            val intent =
-                Intent(appContext, RecordingService::class.java).apply {
-                    action = RecordingService.ACTION_STOP
-                }
-            appContext.startService(intent)
+            appContext.startService(Intent(appContext, RecordingService::class.java).apply { action = RecordingService.ACTION_STOP })
         }
 
         fun requestManualSave() {
             viewModelScope.launch {
                 val config = userPreferencesRepository.recordingConfig.first()
-                val intent =
+                appContext.startService(
                     Intent(appContext, RecordingService::class.java).apply {
                         action = RecordingService.ACTION_SAVE_CLIP
                         putExtra(RecordingService.EXTRA_SECONDS_BEFORE, config.totalBufferSeconds)
                         putExtra(RecordingService.EXTRA_SECONDS_AFTER, config.secondsAfterEvent)
-                    }
-                appContext.startService(intent)
+                    },
+                )
             }
         }
 
