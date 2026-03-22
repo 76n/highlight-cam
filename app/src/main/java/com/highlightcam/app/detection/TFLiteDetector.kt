@@ -53,7 +53,7 @@ class TFLiteDetector
                     gpuDelegate = org.tensorflow.lite.gpu.GpuDelegate()
                     options.addDelegate(gpuDelegate)
                     Timber.d("TFLite GPU delegate initialized")
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     Timber.w("GPU delegate unavailable, falling back to CPU: %s", e.message)
                     gpuDelegate = null
                 }
@@ -62,8 +62,8 @@ class TFLiteDetector
                 interpreter = org.tensorflow.lite.Interpreter(modelBuffer, options)
                 _modelAvailable.value = true
                 Timber.i("TFLite model loaded: %s", MODEL_FILENAME)
-            } catch (e: Exception) {
-                Timber.w("TFLite model not available: %s", e.message)
+            } catch (e: Throwable) {
+                Timber.w(e, "TFLite model not available")
                 _modelAvailable.value = false
             }
         }

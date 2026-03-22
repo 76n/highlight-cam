@@ -83,7 +83,7 @@ class HighlightDetectionEngine
 
                     val action = stateMachine.onVisualResult(result, System.currentTimeMillis())
                     handleAction(action, result.goalZoneId)
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     Timber.e(e, "Frame processing error")
                     _eventFlow.tryEmit(
                         DetectionEvent.DetectionError(e.message ?: "Frame processing error"),
