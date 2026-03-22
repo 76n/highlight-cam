@@ -41,10 +41,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -298,7 +298,7 @@ private fun RecordingContent(
             modifier =
                 Modifier
                     .align(Alignment.TopStart)
-                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(start = Spacing.s20, top = Spacing.s20),
         ) {
             StatusChip(
@@ -333,7 +333,7 @@ private fun RecordingContent(
             modifier =
                 Modifier
                     .align(Alignment.TopEnd)
-                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(end = Spacing.s20, top = Spacing.s20),
             verticalArrangement = Arrangement.spacedBy(Spacing.s8),
         ) {
@@ -345,7 +345,7 @@ private fun RecordingContent(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(bottom = Spacing.s32),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -559,6 +559,7 @@ private fun DebugPanel(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = HC.surface,
         tonalElevation = 0.dp,
+        windowInsets = WindowInsets.safeDrawing,
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.s20).padding(bottom = Spacing.s32)) {
             Text(stringResource(R.string.debug_title), style = HCType.title, color = HC.white, fontWeight = FontWeight.Bold)
@@ -653,7 +654,7 @@ private fun InferenceSparkline(
 
 @Composable
 private fun PermissionRequestScreen(onRequestPermissions: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(HC.bg), Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(HC.bg).safeDrawingPadding(), Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(Spacing.s32),

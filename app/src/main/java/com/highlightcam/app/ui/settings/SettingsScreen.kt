@@ -19,14 +19,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -57,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -106,16 +105,21 @@ fun SettingsScreen(
         }
     }
 
+    val insets = WindowInsets.safeDrawing.asPaddingValues()
+    val layoutDir = LocalLayoutDirection.current
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(HC.bg)
-            .windowInsetsPadding(WindowInsets.statusBars),
+            .background(HC.bg),
     ) {
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(Spacing.s24))
+            Spacer(Modifier.height(insets.calculateTopPadding() + Spacing.s24))
             Row(
-                Modifier.padding(horizontal = Spacing.s24),
+                Modifier.padding(
+                    start = insets.calculateLeftPadding(layoutDir) + Spacing.s24,
+                    end = insets.calculateRightPadding(layoutDir) + Spacing.s24,
+                ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 HCIconButton(Icons.AutoMirrored.Filled.ArrowBack, onClick = { navController.popBackStack() })
@@ -186,10 +190,17 @@ private fun CompactSettings(
     onUpdateSoundOnSave: (Boolean) -> Unit,
     onAboutClick: () -> Unit,
 ) {
-    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val insets = WindowInsets.safeDrawing.asPaddingValues()
+    val layoutDir = LocalLayoutDirection.current
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = Spacing.s24),
-        contentPadding = PaddingValues(top = Spacing.s40, bottom = navBarBottom + Spacing.s24),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding =
+            PaddingValues(
+                top = Spacing.s40,
+                bottom = insets.calculateBottomPadding() + Spacing.s24,
+                start = insets.calculateLeftPadding(layoutDir) + Spacing.s24,
+                end = insets.calculateRightPadding(layoutDir) + Spacing.s24,
+            ),
     ) {
         item {
             DetectionContent(sensitivity, onUpdateSensitivity)
@@ -231,14 +242,19 @@ private fun ExpandedSettings(
     onAboutClick: () -> Unit,
 ) {
     var selectedSection by remember { mutableStateOf(SettingsSection.DETECTION) }
-    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val insets = WindowInsets.safeDrawing.asPaddingValues()
+    val layoutDir = LocalLayoutDirection.current
 
     Row(Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .width(200.dp)
                 .fillMaxHeight()
-                .padding(start = Spacing.s24, top = Spacing.s24),
+                .padding(
+                    start = insets.calculateLeftPadding(layoutDir) + Spacing.s24,
+                    top = Spacing.s24,
+                    bottom = insets.calculateBottomPadding() + Spacing.s24,
+                ),
         ) {
             SettingsSection.entries.forEach { section ->
                 SectionLabel(
@@ -258,8 +274,12 @@ private fun ExpandedSettings(
                     .widthIn(max = 480.dp)
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = Spacing.s24)
-                    .padding(top = Spacing.s24, bottom = navBarBottom + Spacing.s24),
+                    .padding(
+                        start = Spacing.s24,
+                        end = insets.calculateRightPadding(layoutDir) + Spacing.s24,
+                        top = Spacing.s24,
+                        bottom = insets.calculateBottomPadding() + Spacing.s24,
+                    ),
             ) {
                 when (selectedSection) {
                     SettingsSection.DETECTION -> DetectionContent(sensitivity, onUpdateSensitivity)

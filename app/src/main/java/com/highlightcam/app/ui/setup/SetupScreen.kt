@@ -25,10 +25,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -186,7 +186,7 @@ private fun SetupContent(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
-                    .statusBarsPadding()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(top = Spacing.s24),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -223,7 +223,7 @@ private fun SetupContent(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(start = Spacing.s24, end = Spacing.s24, bottom = Spacing.s32),
         ) {
             PrimaryButton("Continue", onClick = onAdvanceToConfirm)
@@ -238,7 +238,7 @@ private fun SetupContent(
             containerColor = HC.surface,
             shape = RoundedCornerShape(topStart = Radii.r24, topEnd = Radii.r24),
             dragHandle = null,
-            windowInsets = WindowInsets.navigationBars,
+            windowInsets = WindowInsets.safeDrawing,
         ) {
             ConfirmSheet(
                 goalAPoints = uiState.goalAPoints,
@@ -499,6 +499,7 @@ private fun PermissionDenied(onRequest: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(HC.bg)
+            .safeDrawingPadding()
             .padding(Spacing.s32),
         Alignment.Center,
     ) {

@@ -34,10 +34,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -84,6 +83,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -126,17 +126,24 @@ fun LibraryScreen(
         return
     }
 
+    val insets = WindowInsets.safeDrawing.asPaddingValues()
+    val layoutDir = LocalLayoutDirection.current
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(HC.bg)
-            .windowInsetsPadding(WindowInsets.statusBars),
+            .background(HC.bg),
     ) {
         Column(Modifier.fillMaxSize()) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Spacing.s24, vertical = Spacing.s24),
+                    .padding(
+                        top = insets.calculateTopPadding() + Spacing.s24,
+                        bottom = Spacing.s24,
+                        start = insets.calculateLeftPadding(layoutDir) + Spacing.s24,
+                        end = insets.calculateRightPadding(layoutDir) + Spacing.s24,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 HCIconButton(Icons.AutoMirrored.Filled.ArrowBack, onClick = { navController.popBackStack() })
@@ -264,15 +271,16 @@ private fun ClipGrid(
     onClipTap: (LibraryClip) -> Unit,
     onClipLongPress: (LibraryClip) -> Unit,
 ) {
-    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val insets = WindowInsets.safeDrawing.asPaddingValues()
+    val layoutDir = LocalLayoutDirection.current
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         contentPadding =
             PaddingValues(
-                start = Spacing.s20,
+                start = insets.calculateLeftPadding(layoutDir) + Spacing.s20,
                 top = Spacing.s20,
-                end = Spacing.s20,
-                bottom = Spacing.s20 + navBarBottom,
+                end = insets.calculateRightPadding(layoutDir) + Spacing.s20,
+                bottom = insets.calculateBottomPadding() + Spacing.s20,
             ),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -370,6 +378,7 @@ private fun ClipDetailSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
         containerColor = HC.surface,
+        windowInsets = WindowInsets.safeDrawing,
     ) {
         Column(Modifier.padding(horizontal = Spacing.s20).padding(bottom = Spacing.s32)) {
             Text(clip.displayName, style = HCType.title, color = HC.white)
@@ -528,7 +537,7 @@ private fun FullScreenPlayer(
                     modifier =
                         Modifier
                             .align(Alignment.TopStart)
-                            .windowInsetsPadding(WindowInsets.statusBars)
+                            .windowInsetsPadding(WindowInsets.safeDrawing)
                             .padding(Spacing.s20),
                 )
 
@@ -556,7 +565,7 @@ private fun FullScreenPlayer(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
                         .padding(start = Spacing.s20, end = Spacing.s20, bottom = Spacing.s32),
                 ) {
                     Row(Modifier.fillMaxWidth().padding(bottom = Spacing.s8), Arrangement.SpaceBetween) {
