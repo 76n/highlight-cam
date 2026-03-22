@@ -9,3 +9,4 @@
 .externalNativeBuild
 .cxx
 local.properties
+app/src/main/assets/yolov8n_float16.tflite

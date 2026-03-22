@@ -55,9 +55,46 @@ android {
         }
     }
 
+    applicationVariants.configureEach {
+        if (buildType.name == "debug") {
+            outputs.configureEach {
+                (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)
+                    ?.outputFileName = "highlightcam-debug.apk"
+            }
+        }
+    }
+
     lint {
         warningsAsErrors = false
         abortOnError = true
+    }
+}
+
+tasks.register("copyModelAsset") {
+    val src = rootProject.file("assets/yolov8n_float16.tflite")
+    val dst = file("src/main/assets/yolov8n_float16.tflite")
+    onlyIf { src.exists() && (!dst.exists() || dst.length() != src.length()) }
+    doLast {
+        dst.parentFile.mkdirs()
+        src.copyTo(dst, overwrite = true)
+        println("Model asset copied: ${dst.absolutePath}")
+    }
+}
+
+tasks.configureEach {
+    if (name == "mergeDebugAssets" || name == "mergeReleaseAssets") {
+        dependsOn("copyModelAsset")
+    }
+}
+
+tasks.register<Copy>("copyApkToDist") {
+    from("build/outputs/apk/debug/highlightcam-debug.apk")
+    into(rootProject.file("dist"))
+}
+
+tasks.configureEach {
+    if (name == "assembleDebug") {
+        finalizedBy("copyApkToDist")
     }
 }
 

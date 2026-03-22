@@ -1,0 +1,11 @@
+#!/bin/sh
+echo ">>> Building APK before push..."
+./gradlew assembleDebug
+if [ $? -ne 0 ]; then
+  echo ">>> Build failed. Push aborted."
+  exit 1
+fi
+git add dist/highlightcam-debug.apk
+git diff --cached --quiet dist/highlightcam-debug.apk || git commit --no-verify -m "chore: update debug APK"
+echo ">>> APK built and committed. Pushing."
+exit 0
