@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -263,9 +264,16 @@ private fun ClipGrid(
     onClipTap: (LibraryClip) -> Unit,
     onClipLongPress: (LibraryClip) -> Unit,
 ) {
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(Spacing.s20),
+        contentPadding =
+            PaddingValues(
+                start = Spacing.s20,
+                top = Spacing.s20,
+                end = Spacing.s20,
+                bottom = Spacing.s20 + navBarBottom,
+            ),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {

@@ -226,6 +226,7 @@ private fun SetupContent(
             containerColor = HC.surface,
             shape = RoundedCornerShape(topStart = Radii.r24, topEnd = Radii.r24),
             dragHandle = null,
+            windowInsets = WindowInsets.navigationBars,
         ) {
             ConfirmSheet(
                 goalAPoints = uiState.goalAPoints,
@@ -385,8 +386,7 @@ private fun ConfirmSheet(
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.s24)
-            .windowInsetsPadding(WindowInsets.navigationBars),
+            .padding(horizontal = Spacing.s24),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
