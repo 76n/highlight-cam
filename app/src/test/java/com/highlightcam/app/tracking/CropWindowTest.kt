@@ -49,6 +49,52 @@ class CropWindowTest {
         assertEquals(0.5f, rect.height(), EPSILON)
     }
 
+    @Test
+    fun `extreme corner crop stays within bounds`() {
+        val rect = CropWindow(0.0f, 0.0f, 2.0f).toRect()
+        assertTrue("left >= 0", rect.left >= 0f)
+        assertTrue("top >= 0", rect.top >= 0f)
+        assertTrue("right <= 1", rect.right <= 1f)
+        assertTrue("bottom <= 1", rect.bottom <= 1f)
+    }
+
+    @Test
+    fun `opposite extreme corner crop stays within bounds`() {
+        val rect = CropWindow(1.0f, 1.0f, 2.0f).toRect()
+        assertTrue("left >= 0", rect.left >= 0f)
+        assertTrue("top >= 0", rect.top >= 0f)
+        assertTrue("right <= 1", rect.right <= 1f)
+        assertTrue("bottom <= 1", rect.bottom <= 1f)
+    }
+
+    @Test
+    fun `scale 1_0 at center covers full frame`() {
+        val rect = CropWindow(0.5f, 0.5f, 1.0f).toRect()
+        assertEquals(0f, rect.left, EPSILON)
+        assertEquals(0f, rect.top, EPSILON)
+        assertEquals(1f, rect.right, EPSILON)
+        assertEquals(1f, rect.bottom, EPSILON)
+    }
+
+    @Test
+    fun `toRect width and height match expected from scale`() {
+        val scale = 1.5f
+        val rect = CropWindow(0.5f, 0.5f, scale).toRect()
+        val expected = 1f / scale
+        assertEquals(expected, rect.width(), EPSILON)
+        assertEquals(expected, rect.height(), EPSILON)
+    }
+
+    @Test
+    fun `clampToFrame keeps center within reachable bounds`() {
+        val result = AutoFollowEngine.clampToFrame(0.9f, 0.9f, 2.0f)
+        val rect = result.toRect()
+        assertTrue("left >= 0", rect.left >= 0f)
+        assertTrue("top >= 0", rect.top >= 0f)
+        assertTrue("right <= 1", rect.right <= 1f + EPSILON)
+        assertTrue("bottom <= 1", rect.bottom <= 1f + EPSILON)
+    }
+
     companion object {
         private const val EPSILON = 0.001f
     }

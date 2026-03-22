@@ -124,6 +124,7 @@ fun SetupScreen(
                 SetupNavEvent.NavigateToRecording ->
                     navController.navigate(Routes.RECORDING) {
                         popUpTo(Routes.SETUP) { inclusive = true }
+                        launchSingleTop = true
                     }
             }
         }

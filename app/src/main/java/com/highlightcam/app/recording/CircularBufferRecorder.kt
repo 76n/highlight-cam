@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -232,9 +233,12 @@ class CircularBufferRecorder
 
         @SuppressLint("MissingPermission")
         private suspend fun segmentLoop(recorder: Recorder) {
-            while (recordingScope.isActive) {
+            while (currentCoroutineContext().isActive) {
                 try {
                     recordOneSegment(recorder)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // CancellationException must propagate for clean shutdown via stop().
+                    throw e
                 } catch (e: Throwable) {
                     Timber.e(e, "Segment recording failed, retrying")
                     delay(SEGMENT_RETRY_DELAY_MS)

@@ -198,9 +198,10 @@ class RecordingService : LifecycleService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        // handleStop() launches a coroutine that calls stopForeground/stopSelf after recorder
+        // cleanup completes. Calling them synchronously here would kill the service before
+        // the recorder and audio resources are properly released.
         handleStop()
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
         super.onTaskRemoved(rootIntent)
     }
 

@@ -198,6 +198,19 @@ class AutoFollowEngineTest {
     }
 
     @Test
+    fun `zero players returns currentCrop unchanged`() {
+        val current = CropWindow(0.4f, 0.6f, 1.2f)
+        val result =
+            engine.computeNextCrop(
+                detections = emptyList(),
+                activeZones = listOf(goalA, goalB),
+                currentCrop = current,
+                config = defaultConfig.copy(minPlayersToTrack = 2),
+            )
+        assertEquals(current, result)
+    }
+
+    @Test
     fun `safetyClamp reduces scale when zones are wider than crop`() {
         val wideZone =
             GoalZone(

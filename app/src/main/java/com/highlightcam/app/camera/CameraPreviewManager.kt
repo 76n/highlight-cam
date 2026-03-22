@@ -112,13 +112,18 @@ class CameraPreviewManager
                 val videoCapture = VideoCapture.withOutput(recorder)
 
                 provider.unbindAll()
-                provider.bindToLifecycle(
-                    lifecycleOwner,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
-                    preview,
-                    imageAnalysis,
-                    videoCapture,
-                )
+                val camera =
+                    provider.bindToLifecycle(
+                        lifecycleOwner,
+                        CameraSelector.DEFAULT_BACK_CAMERA,
+                        preview,
+                        imageAnalysis,
+                        videoCapture,
+                    )
+
+                // Ensure zoom is reset to 1x after every bind to prevent residual zoom from
+                // a previous session affecting the field of view.
+                camera.cameraControl.setZoomRatio(1.0f)
 
                 boundRecorder = recorder
                 boundQuality = quality
