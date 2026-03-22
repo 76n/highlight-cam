@@ -100,12 +100,10 @@ import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.detection.DebugInfo
 import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecorderState
-import com.highlightcam.app.domain.VideoQuality
 import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.tracking.CropWindow
 import com.highlightcam.app.ui.components.FloatingChip
 import com.highlightcam.app.ui.components.HCIconButton
-import com.highlightcam.app.ui.components.LocalActivityLifecycleOwner
 import com.highlightcam.app.ui.components.OverlayState
 import com.highlightcam.app.ui.components.PolygonOverlay
 import com.highlightcam.app.ui.components.PrimaryButton
@@ -138,7 +136,6 @@ fun RecordingScreen(
     val debugInfo by viewModel.debugInfo.collectAsState()
     val lowStorage by viewModel.lowStorageWarning.collectAsState()
     val cropWindow by viewModel.cropWindow.collectAsState()
-    val videoQuality by viewModel.videoQuality.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showDebugPanel by remember { mutableStateOf(false) }
     var showVisionDialog by remember { mutableStateOf(false) }
@@ -196,7 +193,6 @@ fun RecordingScreen(
                 debugMode = debugMode,
                 lowStorage = lowStorage,
                 cropWindow = cropWindow,
-                videoQuality = videoQuality,
                 cameraPreviewManager = cameraPreviewManager,
                 onStartRecording = viewModel::startRecording,
                 onStopRecording = viewModel::stopRecording,
@@ -231,7 +227,6 @@ private fun RecordingContent(
     debugMode: Boolean,
     lowStorage: Boolean,
     cropWindow: CropWindow,
-    videoQuality: VideoQuality,
     cameraPreviewManager: CameraPreviewManager,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
@@ -284,7 +279,7 @@ private fun RecordingContent(
                 }
 
         Box(modifier = cropModifier) {
-            CameraPreview(cameraPreviewManager, videoQuality)
+            CameraPreview(cameraPreviewManager)
 
             if (goalZoneSet != null) {
                 val zoneColors = mapOf("a" to HC.green, "b" to HC.blue)
@@ -389,29 +384,21 @@ private fun RecordingContent(
 }
 
 @Composable
-private fun CameraPreview(
-    cameraPreviewManager: CameraPreviewManager,
-    quality: VideoQuality = VideoQuality.FHD_1080,
-) {
-    // Bind to the Activity lifecycle, not the Composable lifecycle. The Activity stays
-    // RESUMED through all NavHost navigation events, so CameraX never unbinds use cases
-    // when pushing Settings/Library/SetupScreen onto the back stack.
-    val activityLifecycleOwner = LocalActivityLifecycleOwner.current
-    AndroidView(
-        factory = { ctx ->
-            PreviewView(ctx).also { pv ->
-                pv.implementationMode = PreviewView.ImplementationMode.PERFORMANCE
-                cameraPreviewManager.setSurfaceProvider(pv.surfaceProvider)
+private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
+    val ctx = LocalContext.current
+    val previewView =
+        remember {
+            PreviewView(ctx).apply {
+                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             }
-        },
-        modifier = Modifier.fillMaxSize(),
-        update = { pv -> cameraPreviewManager.setSurfaceProvider(pv.surfaceProvider) },
-    )
-    LaunchedEffect(activityLifecycleOwner, quality) {
-        cameraPreviewManager.currentSurfaceProvider?.let {
-            cameraPreviewManager.bindToLifecycle(activityLifecycleOwner, it, quality)
         }
+
+    DisposableEffect(Unit) {
+        cameraPreviewManager.attachPreviewSurface(previewView.surfaceProvider)
+        onDispose { cameraPreviewManager.detachPreviewSurface() }
     }
+
+    AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
 }
 
 @Composable

@@ -12,7 +12,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
+import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.data.UserPreferencesRepository
 import com.highlightcam.app.navigation.HCNavHost
 import com.highlightcam.app.navigation.Routes
@@ -21,12 +23,16 @@ import com.highlightcam.app.ui.components.LocalWindowSizeClass
 import com.highlightcam.app.ui.theme.HighlightCamTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var userPreferencesRepository: UserPreferencesRepository
+
+    @Inject
+    lateinit var cameraPreviewManager: CameraPreviewManager
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,6 +44,11 @@ class MainActivity : ComponentActivity() {
             isAppearanceLightStatusBars = false
             isAppearanceLightNavigationBars = false
         }
+
+        lifecycleScope.launch {
+            cameraPreviewManager.initialize(this@MainActivity)
+        }
+
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
             CompositionLocalProvider(

@@ -3,6 +3,7 @@ package com.highlightcam.app.camera
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Size
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -13,7 +14,6 @@ import androidx.camera.video.Recorder
 import androidx.camera.video.VideoCapture
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import com.highlightcam.app.domain.VideoQuality
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -35,15 +35,25 @@ class CameraPreviewManager
     constructor(
         @ApplicationContext private val context: Context,
     ) {
+        private var camera: Camera? = null
         private var cameraProvider: ProcessCameraProvider? = null
 
-        @Volatile
-        var currentSurfaceProvider: Preview.SurfaceProvider? = null
-            private set
+        private val preview = Preview.Builder().build()
 
-        private var boundRecorder: Recorder? = null
-        private var boundQuality: VideoQuality? = null
-        private var boundLifecycleOwner: LifecycleOwner? = null
+        @Suppress("DEPRECATION")
+        private val imageAnalysis =
+            ImageAnalysis.Builder()
+                .setTargetResolution(Size(640, 480))
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                .build()
+
+        val recorder: Recorder =
+            Recorder.Builder()
+                .setQualitySelector(QualitySelector.from(Quality.FHD))
+                .build()
+
+        val videoCapture: VideoCapture<Recorder> = VideoCapture.withOutput(recorder)
 
         private val _frameFlow =
             MutableSharedFlow<Bitmap>(
@@ -59,60 +69,15 @@ class CameraPreviewManager
         @Volatile
         private var lastFrameTimeMs = 0L
 
-        fun setSurfaceProvider(provider: Preview.SurfaceProvider?) {
-            currentSurfaceProvider = provider
-        }
-
-        @Suppress("MagicNumber", "DEPRECATION")
-        suspend fun bindToLifecycle(
-            lifecycleOwner: LifecycleOwner,
-            surfaceProvider: Preview.SurfaceProvider,
-            quality: VideoQuality = VideoQuality.FHD_1080,
-        ) {
-            if (boundRecorder != null && boundLifecycleOwner === lifecycleOwner && boundQuality == quality) {
-                return
-            }
-
+        suspend fun initialize(lifecycleOwner: LifecycleOwner) {
             try {
                 val provider = getProvider()
                 cameraProvider = provider
-
-                val preview =
-                    Preview.Builder()
-                        .build()
-                        .also { it.setSurfaceProvider(surfaceProvider) }
-
-                val imageAnalysis =
-                    ImageAnalysis.Builder()
-                        .setTargetResolution(Size(640, 480))
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-                        .build()
-
-                imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(context)) { proxy ->
-                    val now = System.currentTimeMillis()
-                    if (now - lastFrameTimeMs >= FRAME_THROTTLE_MS) {
-                        lastFrameTimeMs = now
-                        _frameFlow.tryEmit(proxy.toBitmap())
-                    }
-                    proxy.close()
-                }
-
-                val qualitySelector =
-                    when (quality) {
-                        VideoQuality.HD_720 -> QualitySelector.from(Quality.HD)
-                        VideoQuality.FHD_1080 -> QualitySelector.from(Quality.FHD)
-                    }
-
-                val recorder =
-                    Recorder.Builder()
-                        .setQualitySelector(qualitySelector)
-                        .build()
-
-                val videoCapture = VideoCapture.withOutput(recorder)
-
                 provider.unbindAll()
-                val camera =
+
+                setupImageAnalysis()
+
+                camera =
                     provider.bindToLifecycle(
                         lifecycleOwner,
                         CameraSelector.DEFAULT_BACK_CAMERA,
@@ -120,32 +85,32 @@ class CameraPreviewManager
                         imageAnalysis,
                         videoCapture,
                     )
-
-                // Ensure zoom is reset to 1x after every bind to prevent residual zoom from
-                // a previous session affecting the field of view.
-                camera.cameraControl.setZoomRatio(1.0f)
-
-                boundRecorder = recorder
-                boundQuality = quality
-                boundLifecycleOwner = lifecycleOwner
+                camera?.cameraControl?.setZoomRatio(1.0f)
                 _cameraError.value = null
+                Timber.d("Camera bound to Activity lifecycle")
             } catch (e: Exception) {
-                Timber.e(e, "Camera bind failed")
+                Timber.e(e, "Camera initialization failed")
                 _cameraError.value = e.message ?: "Camera initialization failed"
             }
         }
 
-        fun getRecorder(): Recorder {
-            return boundRecorder
-                ?: throw IllegalStateException("Camera not bound yet — call bindToLifecycle first")
+        fun attachPreviewSurface(surfaceProvider: Preview.SurfaceProvider) {
+            preview.setSurfaceProvider(surfaceProvider)
         }
 
-        fun unbind() {
-            cameraProvider?.unbindAll()
-            cameraProvider = null
-            boundRecorder = null
-            boundQuality = null
-            boundLifecycleOwner = null
+        fun detachPreviewSurface() {
+            preview.setSurfaceProvider(null)
+        }
+
+        private fun setupImageAnalysis() {
+            imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(context)) { proxy ->
+                val now = System.currentTimeMillis()
+                if (now - lastFrameTimeMs >= FRAME_THROTTLE_MS) {
+                    lastFrameTimeMs = now
+                    _frameFlow.tryEmit(proxy.toBitmap())
+                }
+                proxy.close()
+            }
         }
 
         private suspend fun getProvider(): ProcessCameraProvider =

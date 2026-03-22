@@ -75,11 +75,9 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.domain.GoalZone
 import com.highlightcam.app.domain.NormalizedPoint
-import com.highlightcam.app.domain.VideoQuality
 import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.ui.components.FloatingChip
 import com.highlightcam.app.ui.components.GhostButton
-import com.highlightcam.app.ui.components.LocalActivityLifecycleOwner
 import com.highlightcam.app.ui.components.PrimaryButton
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
@@ -105,7 +103,6 @@ fun SetupScreen(
     viewModel: SetupViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val videoQuality by viewModel.videoQuality.collectAsState()
 
     val context = LocalContext.current
     val cameraPreviewManager =
@@ -134,7 +131,6 @@ fun SetupScreen(
     if (cameraPermission.status.isGranted) {
         SetupContent(
             uiState = uiState,
-            videoQuality = videoQuality,
             cameraPreviewManager = cameraPreviewManager,
             onCanvasTap = viewModel::onCanvasTap,
             onHandleDrag = viewModel::onHandleDrag,
@@ -153,7 +149,6 @@ fun SetupScreen(
 @Composable
 private fun SetupContent(
     uiState: SetupUiState,
-    videoQuality: VideoQuality,
     cameraPreviewManager: CameraPreviewManager,
     onCanvasTap: (Float, Float) -> Unit,
     onHandleDrag: (String, Int, Float, Float) -> Unit,
@@ -164,25 +159,25 @@ private fun SetupContent(
     onSkipGoalB: () -> Unit,
 ) {
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
-    val activityLifecycleOwner = LocalActivityLifecycleOwner.current
-    var previewView by remember { mutableStateOf<PreviewView?>(null) }
+    val ctx = LocalContext.current
+    val previewView =
+        remember {
+            PreviewView(ctx).apply {
+                scaleType = PreviewView.ScaleType.FILL_CENTER
+                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            }
+        }
 
-    DisposableEffect(Unit) { onDispose { viewSize = IntSize.Zero } }
-
-    LaunchedEffect(previewView, activityLifecycleOwner, videoQuality) {
-        previewView?.let { cameraPreviewManager.bindToLifecycle(activityLifecycleOwner, it.surfaceProvider, videoQuality) }
+    DisposableEffect(Unit) {
+        cameraPreviewManager.attachPreviewSurface(previewView.surfaceProvider)
+        onDispose {
+            cameraPreviewManager.detachPreviewSurface()
+            viewSize = IntSize.Zero
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {
-        AndroidView(
-            factory = { ctx ->
-                PreviewView(ctx).apply {
-                    scaleType = PreviewView.ScaleType.FILL_CENTER
-                    implementationMode = PreviewView.ImplementationMode.PERFORMANCE
-                }.also { previewView = it }
-            },
-            modifier = Modifier.fillMaxSize(),
-        )
+        AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
 
         ZoneOverlay(
             state = uiState,

@@ -85,7 +85,7 @@ class CircularBufferRecorder
             this.config = config
             recordingStartedAtMs = System.currentTimeMillis()
 
-            val recorder = cameraPreviewManager.getRecorder()
+            val recorder = cameraPreviewManager.recorder
 
             sessionRepository.updateRecorderState(RecorderState.Recording(recordingStartedAtMs))
 
