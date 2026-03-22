@@ -31,6 +31,7 @@ class ClipAssembler
             segmentFiles: List<File>,
             segmentDurationsUs: List<Long>,
             trimLeadingUs: Long = 0L,
+            maxDurationUs: Long = Long.MAX_VALUE,
         ): Result<Uri> =
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -52,11 +53,14 @@ class ClipAssembler
                     for ((segIdx, file) in segmentFiles.withIndex()) {
                         if (!file.exists()) continue
 
+                        val segStartOffsetUs =
+                            timestampOffsetUs(segIdx, segmentDurationsUs, trimLeadingUs)
+                        if (segStartOffsetUs > maxDurationUs) break
+
                         val extractor = MediaExtractor()
                         try {
                             extractor.setDataSource(file.absolutePath)
-                            val offset =
-                                timestampOffsetUs(segIdx, segmentDurationsUs, trimLeadingUs)
+                            val offset = segStartOffsetUs
 
                             if (!muxerStarted) {
                                 for (t in 0 until extractor.trackCount) {
@@ -96,6 +100,7 @@ class ClipAssembler
                                         extractor.advance()
                                         continue
                                     }
+                                    if (adjustedTimeUs > maxDurationUs) break
 
                                     bufferInfo.presentationTimeUs = adjustedTimeUs
                                     bufferInfo.flags = extractor.sampleFlags

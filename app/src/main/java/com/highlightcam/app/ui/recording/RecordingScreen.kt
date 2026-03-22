@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -354,34 +355,31 @@ private fun RecordingContent(
                     .padding(bottom = Spacing.s32),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.width(44.dp + Spacing.s24))
+            Box {
                 RecordButton(
                     isRecording = isRecording,
                     onClick = { if (isRecording) onStopRecording() else onStartRecording() },
                     onLongClick = if (debugMode) onShowDebugPanel else null,
                 )
-                Spacer(Modifier.width(Spacing.s24))
-                Box(contentAlignment = Alignment.Center) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isRecording,
-                        enter = fadeIn(tween(250)) + slideInHorizontally(tween(250)) { it },
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isRecording,
+                    enter = fadeIn(tween(250)) + slideInHorizontally(tween(250)) { it },
+                    modifier = Modifier.align(Alignment.CenterEnd).offset(x = Spacing.s24 + 56.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(HC.white10)
+                            .clickable(onClick = onManualSave),
+                        Alignment.Center,
                     ) {
-                        Box(
-                            Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(HC.white10)
-                                .clickable(onClick = onManualSave),
-                            Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Filled.SportsScore,
-                                contentDescription = null,
-                                tint = HC.white,
-                                modifier = Modifier.size(24.dp),
-                            )
-                        }
+                        Icon(
+                            Icons.Filled.SportsScore,
+                            contentDescription = null,
+                            tint = HC.white,
+                            modifier = Modifier.size(24.dp),
+                        )
                     }
                 }
             }

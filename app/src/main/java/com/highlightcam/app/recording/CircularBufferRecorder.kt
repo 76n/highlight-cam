@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
 import java.util.ArrayDeque
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -49,6 +50,7 @@ class CircularBufferRecorder
         private var activeRecording: androidx.camera.video.Recording? = null
         private val segments = ArrayDeque<SegmentFile>()
         private val segmentLock = Any()
+        private val protectedPaths = mutableSetOf<String>()
 
         @Volatile
         private var config: RecordingConfig = RecordingConfig()
@@ -56,8 +58,7 @@ class CircularBufferRecorder
         @Volatile
         private var recordingStartedAtMs = 0L
 
-        @Volatile
-        private var saveInProgress = false
+        private val isSaving = AtomicBoolean(false)
 
         val state: StateFlow<RecorderState> = sessionRepository.recorderState
 
@@ -100,58 +101,73 @@ class CircularBufferRecorder
             sessionRepository.updateRecorderState(RecorderState.Idle)
         }
 
+        @Suppress("ReturnCount")
         suspend fun saveClip(
             secondsBefore: Int,
             secondsAfter: Int,
         ): Result<Uri> {
-            if (saveInProgress) {
+            if (!isSaving.compareAndSet(false, true)) {
                 Timber.w("Save already in progress, ignoring")
                 return Result.failure(IllegalStateException("Save already in progress"))
             }
 
             try {
-                saveInProgress = true
                 sessionRepository.updateRecorderState(RecorderState.SavingClip(0f))
 
                 val triggerTimeMs = System.currentTimeMillis()
-                val earliestNeeded = triggerTimeMs - secondsBefore * 1000L
-
-                val preSegments =
-                    synchronized(segmentLock) {
-                        segments
-                            .filter { it.startTimeMs + it.durationMs > earliestNeeded }
-                            .toList()
-                    }
 
                 if (secondsAfter > 0) {
                     delay(secondsAfter * 1000L)
                 }
 
-                val postSegments =
-                    synchronized(segmentLock) {
-                        segments.filter { it.startTimeMs >= triggerTimeMs }.toList()
-                    }
+                val clipStartTimeMs = triggerTimeMs - secondsBefore * 1000L
+                val clipEndTimeMs = triggerTimeMs + secondsAfter * 1000L
 
                 val allSegments =
-                    (preSegments + postSegments)
-                        .distinctBy { it.file.absolutePath }
-                        .sortedBy { it.startTimeMs }
-                        .filter { it.file.exists() && it.file.length() > 0 }
+                    synchronized(segmentLock) {
+                        val selected =
+                            segments
+                                .filter { seg ->
+                                    seg.startTimeMs + seg.durationMs > clipStartTimeMs &&
+                                        seg.startTimeMs < clipEndTimeMs &&
+                                        seg.file.exists() &&
+                                        seg.file.length() > 0
+                                }
+                                .toList()
+                        selected.forEach { protectedPaths.add(it.file.absolutePath) }
+                        selected
+                    }
 
                 if (allSegments.isEmpty()) {
+                    Timber.w(
+                        "No segments available for clip [%d before, %d after]",
+                        secondsBefore,
+                        secondsAfter,
+                    )
                     return Result.failure(IllegalStateException("No segments available"))
                 }
 
+                val actualPreMs = triggerTimeMs - allSegments.first().startTimeMs
+                if (actualPreMs < secondsBefore * 1000L) {
+                    Timber.w(
+                        "Only %.1fs of pre-trigger footage available, requested %ds",
+                        actualPreMs / 1000.0,
+                        secondsBefore,
+                    )
+                }
+
+                val trimLeadingUs =
+                    maxOf(0L, clipStartTimeMs - allSegments.first().startTimeMs) * 1000L
+                val desiredDurationUs =
+                    (secondsBefore.toLong() + secondsAfter.toLong()) * 1_000_000L
                 val segmentDurationsUs = allSegments.map { it.durationMs * 1000L }
-                val totalSegmentDurationUs = segmentDurationsUs.sum()
-                val desiredDurationUs = (secondsBefore + secondsAfter) * 1_000_000L
-                val trimLeadingUs = maxOf(0L, totalSegmentDurationUs - desiredDurationUs)
 
                 val result =
                     clipAssembler.assemble(
                         segmentFiles = allSegments.map { it.file },
                         segmentDurationsUs = segmentDurationsUs,
                         trimLeadingUs = trimLeadingUs,
+                        maxDurationUs = desiredDurationUs,
                     )
 
                 result.onSuccess {
@@ -163,7 +179,8 @@ class CircularBufferRecorder
                 Timber.e(e, "Error saving clip")
                 return Result.failure(e)
             } finally {
-                saveInProgress = false
+                synchronized(segmentLock) { protectedPaths.clear() }
+                isSaving.set(false)
                 sessionRepository.updateRecorderState(
                     RecorderState.Recording(recordingStartedAtMs),
                 )
@@ -220,9 +237,11 @@ class CircularBufferRecorder
 
         private fun trimBuffer() {
             val maxSize =
-                if (saveInProgress) config.bufferSegments * 2 else config.bufferSegments
+                if (isSaving.get()) config.bufferSegments * 2 else config.bufferSegments
             while (segments.size > maxSize) {
-                val oldest = segments.removeFirst()
+                val oldest = segments.first()
+                if (oldest.file.absolutePath in protectedPaths) break
+                segments.removeFirst()
                 oldest.file.delete()
             }
         }
