@@ -65,12 +65,10 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
-    implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.text.google.fonts)
     implementation(libs.compose.material.icons.extended)
     debugImplementation(libs.compose.ui.tooling)
-    debugImplementation(libs.compose.ui.test.manifest)
 
     implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
@@ -107,7 +105,4 @@ dependencies {
     testImplementation(libs.datastore.preferences)
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.kotlin)
-    androidTestImplementation(libs.espresso.core)
-    androidTestImplementation(platform(libs.compose.bom))
-    androidTestImplementation(libs.compose.ui.test.junit4)
 }

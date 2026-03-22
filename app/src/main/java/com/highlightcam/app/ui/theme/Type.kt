@@ -18,7 +18,7 @@ private val provider =
 
 private val fontName = GoogleFont("Inter")
 
-val InterFontFamily =
+private val InterFontFamily =
     FontFamily(
         Font(googleFont = fontName, fontProvider = provider, weight = FontWeight.Normal),
         Font(googleFont = fontName, fontProvider = provider, weight = FontWeight.Medium),

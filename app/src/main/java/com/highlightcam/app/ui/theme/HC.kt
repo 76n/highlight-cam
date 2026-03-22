@@ -13,7 +13,6 @@ object HC {
     val green = Color(0xFF00F57A)
     val greenDim = Color(0x3300F57A)
     val blue = Color(0xFF3DBBFF)
-    val blueDim = Color(0x333DBBFF)
     val amber = Color(0xFFFFAA00)
     val amberDim = Color(0x33FFAA00)
     val red = Color(0xFFFF3B3B)

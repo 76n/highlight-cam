@@ -2,7 +2,6 @@ package com.highlightcam.app.ui.recording
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Environment
 import android.os.StatFs
 import androidx.lifecycle.ViewModel
@@ -53,9 +52,6 @@ class RecordingViewModel
             userPreferencesRepository.soundOnSave
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), true)
 
-        private val _lastClipUri = MutableStateFlow<Uri?>(null)
-        val lastClipUri: StateFlow<Uri?> = _lastClipUri.asStateFlow()
-
         private val _candidateDetected = MutableStateFlow(false)
         val candidateDetected: StateFlow<Boolean> = _candidateDetected.asStateFlow()
 
@@ -68,12 +64,6 @@ class RecordingViewModel
         private var candidateTimeoutJob: Job? = null
 
         init {
-            viewModelScope.launch {
-                RecordingService.clipResultFlow.collect { result ->
-                    result.onSuccess { uri -> _lastClipUri.value = uri }
-                }
-            }
-
             viewModelScope.launch {
                 val zoneSet = userPreferencesRepository.goalZoneSet.first()
                 if (zoneSet != null) sessionRepository.setGoalZoneSet(zoneSet)

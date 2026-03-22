@@ -1,7 +1,5 @@
 package com.highlightcam.app.domain
 
-import android.net.Uri
-
 data class NormalizedPoint(
     val x: Float,
     val y: Float,
@@ -85,13 +83,6 @@ data class RecordingConfig(
     val totalBufferSeconds: Int get() = segmentDurationSeconds * bufferSegments
 }
 
-data class SavedClip(
-    val uri: Uri,
-    val durationMs: Long,
-    val savedAt: Long,
-    val triggerReason: String,
-)
-
 sealed class RecorderState {
     data object Idle : RecorderState()
 
@@ -115,11 +106,4 @@ sealed class DetectionEvent {
     ) : DetectionEvent()
 
     data class DetectionError(val message: String) : DetectionEvent()
-}
-
-enum class AppScreen {
-    SETUP,
-    RECORDING,
-    LIBRARY,
-    SETTINGS,
 }

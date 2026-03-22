@@ -137,10 +137,6 @@ class SetupViewModel
             }
         }
 
-        fun keepCurrentZones() {
-            viewModelScope.launch { _navEvents.send(SetupNavEvent.NavigateToRecording) }
-        }
-
         fun redraw() {
             _uiState.update { SetupUiState(isReconfiguring = it.isReconfiguring) }
         }

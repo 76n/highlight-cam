@@ -8,10 +8,6 @@ data class BoundingBox(
 ) {
     val centerX: Float get() = (left + right) / 2f
     val centerY: Float get() = (top + bottom) / 2f
-
-    fun intersects(other: BoundingBox): Boolean =
-        left < other.right && right > other.left &&
-            top < other.bottom && bottom > other.top
 }
 
 data class Detection(
