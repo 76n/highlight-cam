@@ -73,7 +73,12 @@ class RecordingViewModel
         init {
             viewModelScope.launch {
                 val zoneSet = userPreferencesRepository.goalZoneSet.first()
-                if (zoneSet != null) sessionRepository.setGoalZoneSet(zoneSet)
+                if (zoneSet != null) {
+                    sessionRepository.setGoalZoneSet(zoneSet)
+                    // Start frame collection + auto-follow as soon as the screen is visible,
+                    // before recording starts, so the user sees tracking in the preview.
+                    highlightDetectionEngine.startPreviewTracking(zoneSet)
+                }
             }
 
             viewModelScope.launch {
@@ -91,6 +96,11 @@ class RecordingViewModel
                     }
                 }
             }
+        }
+
+        override fun onCleared() {
+            highlightDetectionEngine.stopAll()
+            super.onCleared()
         }
 
         @Suppress("DEPRECATION")

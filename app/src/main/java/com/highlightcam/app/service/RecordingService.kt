@@ -93,8 +93,6 @@ class RecordingService : LifecycleService() {
 
         lifecycleScope.launch {
             val zoneSet = sessionRepository.goalZoneSet.value ?: GoalZoneSet.DEFAULT
-            val autoFollowConfig = userPreferencesRepository.autoFollowConfig.first()
-            highlightDetectionEngine.autoFollowConfig = autoFollowConfig
             highlightDetectionEngine.start(zoneSet)
         }
 

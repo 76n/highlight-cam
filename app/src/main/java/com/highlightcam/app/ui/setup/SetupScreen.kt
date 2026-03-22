@@ -63,7 +63,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -80,6 +79,7 @@ import com.highlightcam.app.domain.VideoQuality
 import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.ui.components.FloatingChip
 import com.highlightcam.app.ui.components.GhostButton
+import com.highlightcam.app.ui.components.LocalActivityLifecycleOwner
 import com.highlightcam.app.ui.components.PrimaryButton
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
@@ -164,13 +164,13 @@ private fun SetupContent(
     onSkipGoalB: () -> Unit,
 ) {
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val activityLifecycleOwner = LocalActivityLifecycleOwner.current
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
 
     DisposableEffect(Unit) { onDispose { viewSize = IntSize.Zero } }
 
-    LaunchedEffect(previewView, lifecycleOwner, videoQuality) {
-        previewView?.let { cameraPreviewManager.bindToLifecycle(lifecycleOwner, it.surfaceProvider, videoQuality) }
+    LaunchedEffect(previewView, activityLifecycleOwner, videoQuality) {
+        previewView?.let { cameraPreviewManager.bindToLifecycle(activityLifecycleOwner, it.surfaceProvider, videoQuality) }
     }
 
     Box(modifier = Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {

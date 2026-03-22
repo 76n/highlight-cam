@@ -83,7 +83,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -106,6 +105,7 @@ import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.tracking.CropWindow
 import com.highlightcam.app.ui.components.FloatingChip
 import com.highlightcam.app.ui.components.HCIconButton
+import com.highlightcam.app.ui.components.LocalActivityLifecycleOwner
 import com.highlightcam.app.ui.components.OverlayState
 import com.highlightcam.app.ui.components.PolygonOverlay
 import com.highlightcam.app.ui.components.PrimaryButton
@@ -393,7 +393,10 @@ private fun CameraPreview(
     cameraPreviewManager: CameraPreviewManager,
     quality: VideoQuality = VideoQuality.FHD_1080,
 ) {
-    val lifecycleOwner = LocalLifecycleOwner.current
+    // Bind to the Activity lifecycle, not the Composable lifecycle. The Activity stays
+    // RESUMED through all NavHost navigation events, so CameraX never unbinds use cases
+    // when pushing Settings/Library/SetupScreen onto the back stack.
+    val activityLifecycleOwner = LocalActivityLifecycleOwner.current
     AndroidView(
         factory = { ctx ->
             PreviewView(ctx).also { pv ->
@@ -404,9 +407,9 @@ private fun CameraPreview(
         modifier = Modifier.fillMaxSize(),
         update = { pv -> cameraPreviewManager.setSurfaceProvider(pv.surfaceProvider) },
     )
-    LaunchedEffect(lifecycleOwner, quality) {
+    LaunchedEffect(activityLifecycleOwner, quality) {
         cameraPreviewManager.currentSurfaceProvider?.let {
-            cameraPreviewManager.bindToLifecycle(lifecycleOwner, it, quality)
+            cameraPreviewManager.bindToLifecycle(activityLifecycleOwner, it, quality)
         }
     }
 }

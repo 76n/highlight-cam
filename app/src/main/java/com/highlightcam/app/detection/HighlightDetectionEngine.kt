@@ -39,6 +39,7 @@ class HighlightDetectionEngine
     ) {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private var collectionJob: Job? = null
+        private var configSyncJob: Job? = null
         private var goalZoneSet: GoalZoneSet = GoalZoneSet.DEFAULT
         val stateMachine = DetectionStateMachine()
 
@@ -60,10 +61,22 @@ class HighlightDetectionEngine
 
         private val recentInferenceTimes = ArrayDeque<Long>(MAX_INFERENCE_HISTORY)
 
+        // Starts frame-only collection for auto-follow preview tracking.
+        // Does not start audio analysis or the detection state machine.
+        fun startPreviewTracking(goalZoneSet: GoalZoneSet) {
+            this.goalZoneSet = goalZoneSet
+            ensureConfigSync()
+            collectionJob?.cancel()
+            collectionJob = scope.launch { collectFrames() }
+        }
+
+        // Starts full detection: audio analysis + state machine + frame collection.
+        // Supersedes preview-only tracking.
         fun start(goalZoneSet: GoalZoneSet) {
             this.goalZoneSet = goalZoneSet
             stateMachine.start()
             audioAnalyzer.start()
+            ensureConfigSync()
 
             collectionJob?.cancel()
             collectionJob =
@@ -73,12 +86,35 @@ class HighlightDetectionEngine
                 }
         }
 
+        // Stops full detection mode and falls back to preview-only tracking
+        // so auto-follow continues between recordings.
         fun stop() {
             collectionJob?.cancel()
             collectionJob = null
             audioAnalyzer.stop()
             stateMachine.stop()
+            collectionJob = scope.launch { collectFrames() }
+        }
+
+        // Stops everything including preview tracking. Call from ViewModel.onCleared.
+        fun stopAll() {
+            collectionJob?.cancel()
+            collectionJob = null
+            configSyncJob?.cancel()
+            configSyncJob = null
+            audioAnalyzer.stop()
+            stateMachine.stop()
             mutableCropWindow.value = CropWindow.FULL_FRAME
+        }
+
+        private fun ensureConfigSync() {
+            if (configSyncJob?.isActive == true) return
+            configSyncJob =
+                scope.launch {
+                    userPreferencesRepository.autoFollowConfig.collect { cfg ->
+                        autoFollowConfig = cfg
+                    }
+                }
         }
 
         @Suppress("TooGenericExceptionCaught")

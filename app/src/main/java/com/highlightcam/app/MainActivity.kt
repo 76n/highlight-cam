@@ -16,6 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import com.highlightcam.app.data.UserPreferencesRepository
 import com.highlightcam.app.navigation.HCNavHost
 import com.highlightcam.app.navigation.Routes
+import com.highlightcam.app.ui.components.LocalActivityLifecycleOwner
 import com.highlightcam.app.ui.components.LocalWindowSizeClass
 import com.highlightcam.app.ui.theme.HighlightCamTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -39,7 +40,10 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
-            CompositionLocalProvider(LocalWindowSizeClass provides windowSizeClass) {
+            CompositionLocalProvider(
+                LocalWindowSizeClass provides windowSizeClass,
+                LocalActivityLifecycleOwner provides this@MainActivity,
+            ) {
                 HighlightCamTheme {
                     val startRoute by produceState<String?>(initialValue = null) {
                         val zoneSet = userPreferencesRepository.goalZoneSet.first()
