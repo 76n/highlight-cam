@@ -101,6 +101,7 @@ import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.detection.DebugInfo
 import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecorderState
+import com.highlightcam.app.domain.VideoQuality
 import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.tracking.CropWindow
 import com.highlightcam.app.ui.components.FloatingChip
@@ -136,6 +137,7 @@ fun RecordingScreen(
     val debugInfo by viewModel.debugInfo.collectAsState()
     val lowStorage by viewModel.lowStorageWarning.collectAsState()
     val cropWindow by viewModel.cropWindow.collectAsState()
+    val videoQuality by viewModel.videoQuality.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showDebugPanel by remember { mutableStateOf(false) }
     var showVisionDialog by remember { mutableStateOf(false) }
@@ -193,6 +195,7 @@ fun RecordingScreen(
                 debugMode = debugMode,
                 lowStorage = lowStorage,
                 cropWindow = cropWindow,
+                videoQuality = videoQuality,
                 cameraPreviewManager = cameraPreviewManager,
                 onStartRecording = viewModel::startRecording,
                 onStopRecording = viewModel::stopRecording,
@@ -227,6 +230,7 @@ private fun RecordingContent(
     debugMode: Boolean,
     lowStorage: Boolean,
     cropWindow: CropWindow,
+    videoQuality: VideoQuality,
     cameraPreviewManager: CameraPreviewManager,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
@@ -247,15 +251,6 @@ private fun RecordingContent(
         }
     var rememberedStartedAt by remember { mutableLongStateOf(0L) }
     if (startedAt > 0L) rememberedStartedAt = startedAt
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    LaunchedEffect(isRecording) {
-        if (!isRecording) {
-            cameraPreviewManager.currentSurfaceProvider?.let {
-                cameraPreviewManager.bindToLifecycle(lifecycleOwner, it)
-            }
-        }
-    }
 
     val chipMode =
         when {
@@ -288,7 +283,7 @@ private fun RecordingContent(
                 }
 
         Box(modifier = cropModifier) {
-            CameraPreview(cameraPreviewManager)
+            CameraPreview(cameraPreviewManager, videoQuality)
 
             if (goalZoneSet != null) {
                 val zoneColors = mapOf("a" to HC.green, "b" to HC.blue)
@@ -393,7 +388,10 @@ private fun RecordingContent(
 }
 
 @Composable
-private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
+private fun CameraPreview(
+    cameraPreviewManager: CameraPreviewManager,
+    quality: VideoQuality = VideoQuality.FHD_1080,
+) {
     val lifecycleOwner = LocalLifecycleOwner.current
     AndroidView(
         factory = { ctx ->
@@ -405,8 +403,10 @@ private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
         modifier = Modifier.fillMaxSize(),
         update = { pv -> cameraPreviewManager.setSurfaceProvider(pv.surfaceProvider) },
     )
-    LaunchedEffect(lifecycleOwner) {
-        cameraPreviewManager.currentSurfaceProvider?.let { cameraPreviewManager.bindToLifecycle(lifecycleOwner, it) }
+    LaunchedEffect(lifecycleOwner, quality) {
+        cameraPreviewManager.currentSurfaceProvider?.let {
+            cameraPreviewManager.bindToLifecycle(lifecycleOwner, it, quality)
+        }
     }
 }
 

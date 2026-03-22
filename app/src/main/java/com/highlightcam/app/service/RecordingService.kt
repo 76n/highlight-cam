@@ -84,7 +84,7 @@ class RecordingService : LifecycleService() {
             try {
                 val config = userPreferencesRepository.recordingConfig.first().copy(videoQuality = quality)
                 circularBufferRecorder.cropWindowProvider = { highlightDetectionEngine.cropWindowFlow.value }
-                circularBufferRecorder.start(config, this@RecordingService)
+                circularBufferRecorder.start(config)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to start recording")
                 sessionRepository.updateRecorderState(RecorderState.Error(e.message ?: "Recording failed"))

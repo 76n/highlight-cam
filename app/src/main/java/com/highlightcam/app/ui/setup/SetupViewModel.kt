@@ -7,13 +7,16 @@ import com.highlightcam.app.data.UserPreferencesRepository
 import com.highlightcam.app.domain.GoalZone
 import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.NormalizedPoint
+import com.highlightcam.app.domain.VideoQuality
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -53,6 +56,10 @@ class SetupViewModel
 
         private val _navEvents = Channel<SetupNavEvent>(Channel.BUFFERED)
         val navEvents = _navEvents.receiveAsFlow()
+
+        val videoQuality: StateFlow<VideoQuality> =
+            userPreferencesRepository.videoQuality
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), VideoQuality.FHD_1080)
 
         init {
             viewModelScope.launch {

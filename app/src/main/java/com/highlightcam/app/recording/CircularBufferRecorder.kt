@@ -7,7 +7,6 @@ import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Recorder
 import androidx.camera.video.VideoRecordEvent
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.LifecycleOwner
 import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.data.SessionRepository
 import com.highlightcam.app.domain.RecorderState
@@ -81,18 +80,11 @@ class CircularBufferRecorder
             get() = File(context.cacheDir, "hc_segments").also { it.mkdirs() }
 
         @SuppressLint("MissingPermission")
-        suspend fun start(
-            config: RecordingConfig,
-            lifecycleOwner: LifecycleOwner,
-        ) {
+        fun start(config: RecordingConfig) {
             this.config = config
             recordingStartedAtMs = System.currentTimeMillis()
 
-            val recorder =
-                cameraPreviewManager.bindWithVideoCapture(
-                    lifecycleOwner,
-                    config.videoQuality,
-                )
+            val recorder = cameraPreviewManager.getRecorder()
 
             sessionRepository.updateRecorderState(RecorderState.Recording(recordingStartedAtMs))
 

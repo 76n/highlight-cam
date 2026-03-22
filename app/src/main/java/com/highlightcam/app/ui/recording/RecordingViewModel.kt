@@ -14,6 +14,7 @@ import com.highlightcam.app.detection.TFLiteDetector
 import com.highlightcam.app.domain.DetectionEvent
 import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecorderState
+import com.highlightcam.app.domain.VideoQuality
 import com.highlightcam.app.service.RecordingService
 import com.highlightcam.app.tracking.CropWindow
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -53,6 +54,10 @@ class RecordingViewModel
         val soundOnSave: StateFlow<Boolean> =
             userPreferencesRepository.soundOnSave
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), true)
+
+        val videoQuality: StateFlow<VideoQuality> =
+            userPreferencesRepository.videoQuality
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), VideoQuality.FHD_1080)
 
         private val _candidateDetected = MutableStateFlow(false)
         val candidateDetected: StateFlow<Boolean> = _candidateDetected.asStateFlow()

@@ -109,6 +109,11 @@ class UserPreferencesRepository
                 )
             }
 
+        val videoQuality: Flow<VideoQuality> =
+            dataStore.data.map { prefs ->
+                prefs[Keys.VIDEO_QUALITY]?.let { VideoQuality.valueOf(it) } ?: VideoQuality.HD_720
+            }
+
         val debugModeEnabled: Flow<Boolean> = dataStore.data.map { it[Keys.DEBUG_MODE] ?: false }
         val detectionSensitivity: Flow<Float> = dataStore.data.map { it[Keys.DETECTION_SENSITIVITY] ?: 0.5f }
         val soundOnSave: Flow<Boolean> = dataStore.data.map { it[Keys.SOUND_ON_SAVE] ?: true }

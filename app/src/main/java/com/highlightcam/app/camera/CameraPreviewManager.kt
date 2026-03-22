@@ -41,6 +41,10 @@ class CameraPreviewManager
         var currentSurfaceProvider: Preview.SurfaceProvider? = null
             private set
 
+        private var boundRecorder: Recorder? = null
+        private var boundQuality: VideoQuality? = null
+        private var boundLifecycleOwner: LifecycleOwner? = null
+
         private val _frameFlow =
             MutableSharedFlow<Bitmap>(
                 replay = 0,
@@ -63,7 +67,12 @@ class CameraPreviewManager
         suspend fun bindToLifecycle(
             lifecycleOwner: LifecycleOwner,
             surfaceProvider: Preview.SurfaceProvider,
+            quality: VideoQuality = VideoQuality.FHD_1080,
         ) {
+            if (boundRecorder != null && boundLifecycleOwner === lifecycleOwner && boundQuality == quality) {
+                return
+            }
+
             try {
                 val provider = getProvider()
                 cameraProvider = provider
@@ -89,13 +98,31 @@ class CameraPreviewManager
                     proxy.close()
                 }
 
+                val qualitySelector =
+                    when (quality) {
+                        VideoQuality.HD_720 -> QualitySelector.from(Quality.HD)
+                        VideoQuality.FHD_1080 -> QualitySelector.from(Quality.FHD)
+                    }
+
+                val recorder =
+                    Recorder.Builder()
+                        .setQualitySelector(qualitySelector)
+                        .build()
+
+                val videoCapture = VideoCapture.withOutput(recorder)
+
                 provider.unbindAll()
                 provider.bindToLifecycle(
                     lifecycleOwner,
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     preview,
                     imageAnalysis,
+                    videoCapture,
                 )
+
+                boundRecorder = recorder
+                boundQuality = quality
+                boundLifecycleOwner = lifecycleOwner
                 _cameraError.value = null
             } catch (e: Exception) {
                 Timber.e(e, "Camera bind failed")
@@ -103,45 +130,17 @@ class CameraPreviewManager
             }
         }
 
-        suspend fun bindWithVideoCapture(
-            lifecycleOwner: LifecycleOwner,
-            quality: VideoQuality,
-        ): Recorder {
-            val provider = getProvider()
-            cameraProvider = provider
-
-            val preview =
-                Preview.Builder()
-                    .build()
-                    .also { p -> currentSurfaceProvider?.let { p.setSurfaceProvider(it) } }
-
-            val qualitySelector =
-                when (quality) {
-                    VideoQuality.HD_720 -> QualitySelector.from(Quality.HD)
-                    VideoQuality.FHD_1080 -> QualitySelector.from(Quality.FHD)
-                }
-
-            val recorder =
-                Recorder.Builder()
-                    .setQualitySelector(qualitySelector)
-                    .build()
-
-            val videoCapture = VideoCapture.withOutput(recorder)
-
-            provider.unbindAll()
-            provider.bindToLifecycle(
-                lifecycleOwner,
-                CameraSelector.DEFAULT_BACK_CAMERA,
-                preview,
-                videoCapture,
-            )
-            _cameraError.value = null
-            return recorder
+        fun getRecorder(): Recorder {
+            return boundRecorder
+                ?: throw IllegalStateException("Camera not bound yet — call bindToLifecycle first")
         }
 
         fun unbind() {
             cameraProvider?.unbindAll()
             cameraProvider = null
+            boundRecorder = null
+            boundQuality = null
+            boundLifecycleOwner = null
         }
 
         private suspend fun getProvider(): ProcessCameraProvider =

@@ -76,6 +76,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.domain.GoalZone
 import com.highlightcam.app.domain.NormalizedPoint
+import com.highlightcam.app.domain.VideoQuality
 import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.ui.components.FloatingChip
 import com.highlightcam.app.ui.components.GhostButton
@@ -103,6 +104,7 @@ fun SetupScreen(
     viewModel: SetupViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val videoQuality by viewModel.videoQuality.collectAsState()
 
     val context = LocalContext.current
     val cameraPreviewManager =
@@ -130,6 +132,7 @@ fun SetupScreen(
     if (cameraPermission.status.isGranted) {
         SetupContent(
             uiState = uiState,
+            videoQuality = videoQuality,
             cameraPreviewManager = cameraPreviewManager,
             onCanvasTap = viewModel::onCanvasTap,
             onHandleDrag = viewModel::onHandleDrag,
@@ -148,6 +151,7 @@ fun SetupScreen(
 @Composable
 private fun SetupContent(
     uiState: SetupUiState,
+    videoQuality: VideoQuality,
     cameraPreviewManager: CameraPreviewManager,
     onCanvasTap: (Float, Float) -> Unit,
     onHandleDrag: (String, Int, Float, Float) -> Unit,
@@ -163,8 +167,8 @@ private fun SetupContent(
 
     DisposableEffect(Unit) { onDispose { viewSize = IntSize.Zero } }
 
-    LaunchedEffect(previewView, lifecycleOwner) {
-        previewView?.let { cameraPreviewManager.bindToLifecycle(lifecycleOwner, it.surfaceProvider) }
+    LaunchedEffect(previewView, lifecycleOwner, videoQuality) {
+        previewView?.let { cameraPreviewManager.bindToLifecycle(lifecycleOwner, it.surfaceProvider, videoQuality) }
     }
 
     Box(modifier = Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {
