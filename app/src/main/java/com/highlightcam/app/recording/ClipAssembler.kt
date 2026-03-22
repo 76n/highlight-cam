@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.highlightcam.app.tracking.CropWindow
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,6 +26,7 @@ class ClipAssembler
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
+        private val cropTranscoder: CropTranscoder,
     ) {
         @SuppressLint("WrongConstant")
         suspend fun assemble(
@@ -32,6 +34,7 @@ class ClipAssembler
             segmentDurationsUs: List<Long>,
             trimLeadingUs: Long = 0L,
             maxDurationUs: Long = Long.MAX_VALUE,
+            cropTimeline: List<Pair<Long, CropWindow>>? = null,
         ): Result<Uri> =
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -127,8 +130,25 @@ class ClipAssembler
                         "Muxer produced empty or missing file: ${outputFile.absolutePath}"
                     }
 
-                    val uri = saveToMediaStore(outputFile)
-                    outputFile.delete()
+                    val fileToSave =
+                        if (!cropTimeline.isNullOrEmpty()) {
+                            val croppedFile = File(outputFile.parent, "cropped_${outputFile.name}")
+                            val clipStartMs = cropTimeline.first().first
+                            val success = cropTranscoder.transcode(outputFile, croppedFile, cropTimeline, clipStartMs)
+                            if (success && croppedFile.exists() && croppedFile.length() > 0) {
+                                outputFile.delete()
+                                croppedFile
+                            } else {
+                                Timber.w("Crop transcode failed, saving uncropped clip")
+                                croppedFile.delete()
+                                outputFile
+                            }
+                        } else {
+                            outputFile
+                        }
+
+                    val uri = saveToMediaStore(fileToSave)
+                    fileToSave.delete()
 
                     verifyMediaStoreEntry(uri)
 

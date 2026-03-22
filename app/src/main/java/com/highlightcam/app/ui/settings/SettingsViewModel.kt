@@ -3,9 +3,9 @@ package com.highlightcam.app.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.highlightcam.app.data.UserPreferencesRepository
-import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecordingConfig
 import com.highlightcam.app.domain.VideoQuality
+import com.highlightcam.app.tracking.AutoFollowConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,9 +27,9 @@ class SettingsViewModel
             userPreferencesRepository.recordingConfig
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), RecordingConfig())
 
-        val goalZoneSet: StateFlow<GoalZoneSet?> =
-            userPreferencesRepository.goalZoneSet
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), null)
+        val autoFollowConfig: StateFlow<AutoFollowConfig> =
+            userPreferencesRepository.autoFollowConfig
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), AutoFollowConfig())
 
         val debugMode: StateFlow<Boolean> =
             userPreferencesRepository.debugModeEnabled
@@ -66,6 +66,14 @@ class SettingsViewModel
 
         fun updateSoundOnSave(enabled: Boolean) {
             viewModelScope.launch { userPreferencesRepository.updateSoundOnSave(enabled) }
+        }
+
+        fun updateAutoFollowEnabled(enabled: Boolean) {
+            viewModelScope.launch { userPreferencesRepository.updateAutoFollowEnabled(enabled) }
+        }
+
+        fun updateAutoFollowAlpha(alpha: Float) {
+            viewModelScope.launch { userPreferencesRepository.updateAutoFollowAlpha(alpha) }
         }
 
         companion object {

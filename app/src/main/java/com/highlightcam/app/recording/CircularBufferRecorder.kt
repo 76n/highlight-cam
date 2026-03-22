@@ -12,6 +12,7 @@ import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.data.SessionRepository
 import com.highlightcam.app.domain.RecorderState
 import com.highlightcam.app.domain.RecordingConfig
+import com.highlightcam.app.tracking.CropWindow
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +68,8 @@ class CircularBufferRecorder
         private var recordingStartedAtMs = 0L
 
         private val isSaving = AtomicBoolean(false)
+
+        var cropWindowProvider: (() -> CropWindow)? = null
 
         private val _saveErrorFlow =
             MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -152,9 +155,17 @@ class CircularBufferRecorder
             sessionRepository.updateRecorderState(RecorderState.SavingClip(0f))
 
             val triggerTimeMs = System.currentTimeMillis()
+            val cropSnapshots = mutableListOf<Pair<Long, CropWindow>>()
 
             if (secondsAfter > 0) {
-                delay(secondsAfter * 1000L)
+                val afterMs = secondsAfter * 1000L
+                val start = System.currentTimeMillis()
+                while (System.currentTimeMillis() - start < afterMs) {
+                    cropWindowProvider?.invoke()?.let { cw ->
+                        cropSnapshots.add(System.currentTimeMillis() to cw)
+                    }
+                    delay(CROP_SNAPSHOT_INTERVAL_MS)
+                }
             }
 
             val clipStartTimeMs = triggerTimeMs - secondsBefore * 1000L
@@ -189,11 +200,16 @@ class CircularBufferRecorder
                     (secondsBefore.toLong() + secondsAfter.toLong()) * 1_000_000L
                 val segmentDurationsUs = allSegments.map { it.durationMs * 1000L }
 
+                val hasNonTrivialCrop =
+                    cropSnapshots.any { it.second != CropWindow.FULL_FRAME }
+                val timeline = if (hasNonTrivialCrop) cropSnapshots else null
+
                 return clipAssembler.assemble(
                     segmentFiles = allSegments.map { it.file },
                     segmentDurationsUs = segmentDurationsUs,
                     trimLeadingUs = trimLeadingUs,
                     maxDurationUs = desiredDurationUs,
+                    cropTimeline = timeline,
                 )
             } finally {
                 allSegments.forEach { protectedFiles.remove(it.file) }
@@ -288,5 +304,6 @@ class CircularBufferRecorder
             private const val SEGMENT_RETRY_DELAY_MS = 500L
             private const val SEGMENT_WAIT_INTERVAL_MS = 200L
             private const val MAX_SEGMENT_WAIT_ATTEMPTS = 50
+            private const val CROP_SNAPSHOT_INTERVAL_MS = 100L
         }
     }

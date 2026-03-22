@@ -83,6 +83,7 @@ class RecordingService : LifecycleService() {
         lifecycleScope.launch {
             try {
                 val config = userPreferencesRepository.recordingConfig.first().copy(videoQuality = quality)
+                circularBufferRecorder.cropWindowProvider = { highlightDetectionEngine.cropWindowFlow.value }
                 circularBufferRecorder.start(config, this@RecordingService)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to start recording")
@@ -92,6 +93,8 @@ class RecordingService : LifecycleService() {
 
         lifecycleScope.launch {
             val zoneSet = sessionRepository.goalZoneSet.value ?: GoalZoneSet.DEFAULT
+            val autoFollowConfig = userPreferencesRepository.autoFollowConfig.first()
+            highlightDetectionEngine.autoFollowConfig = autoFollowConfig
             highlightDetectionEngine.start(zoneSet)
         }
 

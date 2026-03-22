@@ -1,9 +1,12 @@
 package com.highlightcam.app.ui.settings
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -61,6 +64,7 @@ import com.highlightcam.app.BuildConfig
 import com.highlightcam.app.R
 import com.highlightcam.app.domain.RecordingConfig
 import com.highlightcam.app.domain.VideoQuality
+import com.highlightcam.app.tracking.AutoFollowConfig
 import com.highlightcam.app.ui.components.HCIconButton
 import com.highlightcam.app.ui.components.LocalWindowSizeClass
 import com.highlightcam.app.ui.theme.HC
@@ -70,6 +74,7 @@ import com.highlightcam.app.ui.theme.Spacing
 
 private enum class SettingsSection(val label: String) {
     DETECTION("Detection"),
+    CAMERA("Camera"),
     CLIP_TIMING("Clip Timing"),
     VIDEO("Video"),
     APP("App"),
@@ -83,6 +88,7 @@ fun SettingsScreen(
 ) {
     val sensitivity by viewModel.sensitivity.collectAsState()
     val config by viewModel.recordingConfig.collectAsState()
+    val autoFollowConfig by viewModel.autoFollowConfig.collectAsState()
     val debugMode by viewModel.debugMode.collectAsState()
     val soundOnSave by viewModel.soundOnSave.collectAsState()
     var showAboutDialog by remember { mutableStateOf(false) }
@@ -116,9 +122,12 @@ fun SettingsScreen(
                 CompactSettings(
                     sensitivity = sensitivity,
                     config = config,
+                    autoFollowConfig = autoFollowConfig,
                     debugMode = debugMode,
                     soundOnSave = soundOnSave,
                     onUpdateSensitivity = viewModel::updateSensitivity,
+                    onUpdateAutoFollowEnabled = viewModel::updateAutoFollowEnabled,
+                    onUpdateAutoFollowAlpha = viewModel::updateAutoFollowAlpha,
                     onUpdateSecondsBefore = { viewModel.updateSecondsBefore(it) },
                     onUpdateSecondsAfter = { viewModel.updateSecondsAfter(it) },
                     onUpdateQuality = viewModel::updateQuality,
@@ -130,9 +139,12 @@ fun SettingsScreen(
                 ExpandedSettings(
                     sensitivity = sensitivity,
                     config = config,
+                    autoFollowConfig = autoFollowConfig,
                     debugMode = debugMode,
                     soundOnSave = soundOnSave,
                     onUpdateSensitivity = viewModel::updateSensitivity,
+                    onUpdateAutoFollowEnabled = viewModel::updateAutoFollowEnabled,
+                    onUpdateAutoFollowAlpha = viewModel::updateAutoFollowAlpha,
                     onUpdateSecondsBefore = { viewModel.updateSecondsBefore(it) },
                     onUpdateSecondsAfter = { viewModel.updateSecondsAfter(it) },
                     onUpdateQuality = viewModel::updateQuality,
@@ -159,9 +171,12 @@ fun SettingsScreen(
 private fun CompactSettings(
     sensitivity: Float,
     config: RecordingConfig,
+    autoFollowConfig: AutoFollowConfig,
     debugMode: Boolean,
     soundOnSave: Boolean,
     onUpdateSensitivity: (Float) -> Unit,
+    onUpdateAutoFollowEnabled: (Boolean) -> Unit,
+    onUpdateAutoFollowAlpha: (Float) -> Unit,
     onUpdateSecondsBefore: (Int) -> Unit,
     onUpdateSecondsAfter: (Int) -> Unit,
     onUpdateQuality: (VideoQuality) -> Unit,
@@ -186,6 +201,15 @@ private fun CompactSettings(
             Spacer(Modifier.height(Spacing.s40))
         }
         item {
+            CameraContent(
+                autoFollowConfig = autoFollowConfig,
+                videoQuality = config.videoQuality,
+                onUpdateEnabled = onUpdateAutoFollowEnabled,
+                onUpdateAlpha = onUpdateAutoFollowAlpha,
+            )
+            Spacer(Modifier.height(Spacing.s40))
+        }
+        item {
             ClipTimingContent(config, onUpdateSecondsBefore, onUpdateSecondsAfter)
             Spacer(Modifier.height(Spacing.s40))
         }
@@ -204,9 +228,12 @@ private fun CompactSettings(
 private fun ExpandedSettings(
     sensitivity: Float,
     config: RecordingConfig,
+    autoFollowConfig: AutoFollowConfig,
     debugMode: Boolean,
     soundOnSave: Boolean,
     onUpdateSensitivity: (Float) -> Unit,
+    onUpdateAutoFollowEnabled: (Boolean) -> Unit,
+    onUpdateAutoFollowAlpha: (Float) -> Unit,
     onUpdateSecondsBefore: (Int) -> Unit,
     onUpdateSecondsAfter: (Int) -> Unit,
     onUpdateQuality: (VideoQuality) -> Unit,
@@ -256,6 +283,8 @@ private fun ExpandedSettings(
             ) {
                 when (selectedSection) {
                     SettingsSection.DETECTION -> DetectionContent(sensitivity, onUpdateSensitivity)
+                    SettingsSection.CAMERA ->
+                        CameraContent(autoFollowConfig, config.videoQuality, onUpdateAutoFollowEnabled, onUpdateAutoFollowAlpha)
                     SettingsSection.CLIP_TIMING -> ClipTimingContent(config, onUpdateSecondsBefore, onUpdateSecondsAfter)
                     SettingsSection.VIDEO -> VideoContent(config, onUpdateQuality)
                     SettingsSection.APP -> AppContent(debugMode, soundOnSave, onUpdateDebugMode, onUpdateSoundOnSave, onAboutClick)
@@ -328,6 +357,93 @@ private fun DetectionContent(
         color = HC.white60,
     )
 }
+
+@Composable
+private fun CameraContent(
+    autoFollowConfig: AutoFollowConfig,
+    videoQuality: VideoQuality,
+    onUpdateEnabled: (Boolean) -> Unit,
+    onUpdateAlpha: (Float) -> Unit,
+) {
+    val is720p = videoQuality == VideoQuality.HD_720
+    var showWarning by remember { mutableStateOf(false) }
+
+    SettingSwitch(
+        label = "Auto-follow action",
+        checked = autoFollowConfig.enabled,
+        onCheckedChange = { enabled ->
+            onUpdateEnabled(enabled)
+            if (enabled && is720p) showWarning = true
+        },
+    )
+    Spacer(Modifier.height(Spacing.s4))
+    Text(
+        "Digitally pans and zooms to follow players",
+        style = HCType.micro,
+        color = HC.white60,
+    )
+
+    if (showWarning && is720p) {
+        Spacer(Modifier.height(Spacing.s8))
+        Text(
+            "For best results, switch to 1080p in Video settings.",
+            style = HCType.micro,
+            color = HC.amber,
+        )
+    }
+
+    AnimatedVisibility(
+        visible = autoFollowConfig.enabled,
+        enter = fadeIn(),
+        exit = fadeOut(),
+    ) {
+        Column {
+            Spacer(Modifier.height(Spacing.s16))
+            FollowSpeedSlider(
+                alpha = autoFollowConfig.smoothingAlpha,
+                onValueChange = onUpdateAlpha,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FollowSpeedSlider(
+    alpha: Float,
+    onValueChange: (Float) -> Unit,
+) {
+    val speedLabel =
+        when {
+            alpha < ALPHA_SMOOTH_THRESHOLD -> "Cinematic"
+            alpha < ALPHA_RESPONSIVE_THRESHOLD -> "Smooth"
+            else -> "Responsive"
+        }
+
+    Column {
+        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+            Text("Follow speed", style = HCType.body, color = HC.white)
+            Text(speedLabel, style = HCType.label, color = HC.green)
+        }
+        Slider(
+            value = alpha,
+            onValueChange = onValueChange,
+            valueRange = AutoFollowConfig.MIN_ALPHA..AutoFollowConfig.MAX_ALPHA,
+            colors =
+                SliderDefaults.colors(
+                    thumbColor = HC.white,
+                    activeTrackColor = HC.green,
+                    inactiveTrackColor = HC.white20,
+                ),
+            thumb = {
+                Box(Modifier.size(20.dp).clip(CircleShape).background(HC.white))
+            },
+        )
+    }
+}
+
+private const val ALPHA_SMOOTH_THRESHOLD = 0.08f
+private const val ALPHA_RESPONSIVE_THRESHOLD = 0.13f
 
 @Composable
 private fun ClipTimingContent(

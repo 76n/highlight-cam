@@ -5,6 +5,9 @@ import com.highlightcam.app.data.SessionRepository
 import com.highlightcam.app.data.UserPreferencesRepository
 import com.highlightcam.app.domain.DetectionEvent
 import com.highlightcam.app.domain.GoalZoneSet
+import com.highlightcam.app.tracking.AutoFollowConfig
+import com.highlightcam.app.tracking.AutoFollowEngine
+import com.highlightcam.app.tracking.CropWindow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,11 +35,18 @@ class HighlightDetectionEngine
         private val cameraPreviewManager: CameraPreviewManager,
         private val sessionRepository: SessionRepository,
         private val userPreferencesRepository: UserPreferencesRepository,
+        private val autoFollowEngine: AutoFollowEngine,
     ) {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private var collectionJob: Job? = null
         private var goalZoneSet: GoalZoneSet = GoalZoneSet.DEFAULT
         val stateMachine = DetectionStateMachine()
+
+        @Volatile
+        var autoFollowConfig: AutoFollowConfig = AutoFollowConfig()
+
+        private val mutableCropWindow = MutableStateFlow(CropWindow.FULL_FRAME)
+        val cropWindowFlow: StateFlow<CropWindow> = mutableCropWindow.asStateFlow()
 
         private val _eventFlow =
             MutableSharedFlow<DetectionEvent>(
@@ -68,6 +78,7 @@ class HighlightDetectionEngine
             collectionJob = null
             audioAnalyzer.stop()
             stateMachine.stop()
+            mutableCropWindow.value = CropWindow.FULL_FRAME
         }
 
         @Suppress("TooGenericExceptionCaught")
@@ -80,6 +91,19 @@ class HighlightDetectionEngine
 
                     trackInferenceTime(tfliteDetector.lastInferenceTimeMs)
                     updateDebugVisual(result)
+
+                    val cfg = autoFollowConfig
+                    if (cfg.enabled) {
+                        mutableCropWindow.value =
+                            autoFollowEngine.computeNextCrop(
+                                detections = detections,
+                                activeZones = goalZoneSet.activeZones,
+                                currentCrop = mutableCropWindow.value,
+                                config = cfg,
+                            )
+                    } else if (mutableCropWindow.value != CropWindow.FULL_FRAME) {
+                        mutableCropWindow.value = CropWindow.FULL_FRAME
+                    }
 
                     val action = stateMachine.onVisualResult(result, System.currentTimeMillis())
                     handleAction(action, result.goalZoneId)

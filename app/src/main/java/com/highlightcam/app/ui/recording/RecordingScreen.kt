@@ -79,6 +79,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -101,6 +102,7 @@ import com.highlightcam.app.detection.DebugInfo
 import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecorderState
 import com.highlightcam.app.navigation.Routes
+import com.highlightcam.app.tracking.CropWindow
 import com.highlightcam.app.ui.components.FloatingChip
 import com.highlightcam.app.ui.components.HCIconButton
 import com.highlightcam.app.ui.components.OverlayState
@@ -133,6 +135,7 @@ fun RecordingScreen(
     val debugMode by viewModel.debugModeEnabled.collectAsState()
     val debugInfo by viewModel.debugInfo.collectAsState()
     val lowStorage by viewModel.lowStorageWarning.collectAsState()
+    val cropWindow by viewModel.cropWindow.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showDebugPanel by remember { mutableStateOf(false) }
     var showVisionDialog by remember { mutableStateOf(false) }
@@ -189,6 +192,7 @@ fun RecordingScreen(
                 modelAvailable = modelAvailable,
                 debugMode = debugMode,
                 lowStorage = lowStorage,
+                cropWindow = cropWindow,
                 cameraPreviewManager = cameraPreviewManager,
                 onStartRecording = viewModel::startRecording,
                 onStopRecording = viewModel::stopRecording,
@@ -222,6 +226,7 @@ private fun RecordingContent(
     modelAvailable: Boolean,
     debugMode: Boolean,
     lowStorage: Boolean,
+    cropWindow: CropWindow,
     cameraPreviewManager: CameraPreviewManager,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
@@ -267,16 +272,33 @@ private fun RecordingContent(
         }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        CameraPreview(cameraPreviewManager)
+        val cropRect = cropWindow.toRect()
+        val cropScaleX = 1f / (cropRect.right - cropRect.left)
+        val cropScaleY = 1f / (cropRect.bottom - cropRect.top)
+        val cropModifier =
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = cropScaleX
+                    scaleY = cropScaleY
+                    translationX = -cropRect.left * size.width * cropScaleX
+                    translationY = -cropRect.top * size.height * cropScaleY
+                    transformOrigin = TransformOrigin(0f, 0f)
+                    clip = true
+                }
 
-        if (goalZoneSet != null) {
-            val zoneColors = mapOf("a" to HC.green, "b" to HC.blue)
-            PolygonOverlay(
-                zones =
-                    goalZoneSet.activeZones.map { zone ->
-                        ZoneDisplay(zone, zoneColors[zone.id] ?: HC.green, zoneState(zone.id))
-                    },
-            )
+        Box(modifier = cropModifier) {
+            CameraPreview(cameraPreviewManager)
+
+            if (goalZoneSet != null) {
+                val zoneColors = mapOf("a" to HC.green, "b" to HC.blue)
+                PolygonOverlay(
+                    zones =
+                        goalZoneSet.activeZones.map { zone ->
+                            ZoneDisplay(zone, zoneColors[zone.id] ?: HC.green, zoneState(zone.id))
+                        },
+                )
+            }
         }
 
         AnimatedVisibility(

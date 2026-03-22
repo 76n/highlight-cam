@@ -15,6 +15,7 @@ import com.highlightcam.app.domain.DetectionEvent
 import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecorderState
 import com.highlightcam.app.service.RecordingService
+import com.highlightcam.app.tracking.CropWindow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -43,6 +44,7 @@ class RecordingViewModel
         val goalZoneSet: StateFlow<GoalZoneSet?> = sessionRepository.goalZoneSet
         val modelAvailable: StateFlow<Boolean> = tfliteDetector.modelAvailable
         val debugInfo: StateFlow<DebugInfo> = highlightDetectionEngine.debugInfo
+        val cropWindow: StateFlow<CropWindow> = highlightDetectionEngine.cropWindowFlow
 
         val debugModeEnabled: StateFlow<Boolean> =
             userPreferencesRepository.debugModeEnabled

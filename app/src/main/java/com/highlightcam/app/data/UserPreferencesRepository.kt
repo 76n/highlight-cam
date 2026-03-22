@@ -12,6 +12,7 @@ import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.NormalizedPoint
 import com.highlightcam.app.domain.RecordingConfig
 import com.highlightcam.app.domain.VideoQuality
+import com.highlightcam.app.tracking.AutoFollowConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -47,6 +48,8 @@ class UserPreferencesRepository
             val DEBUG_MODE = booleanPreferencesKey("debug_mode")
             val DETECTION_SENSITIVITY = floatPreferencesKey("detection_sensitivity")
             val SOUND_ON_SAVE = booleanPreferencesKey("sound_on_save")
+            val AUTO_FOLLOW_ENABLED = booleanPreferencesKey("auto_follow_enabled")
+            val AUTO_FOLLOW_ALPHA = floatPreferencesKey("auto_follow_alpha")
         }
 
         val goalZoneSet: Flow<GoalZoneSet?> =
@@ -110,6 +113,14 @@ class UserPreferencesRepository
         val detectionSensitivity: Flow<Float> = dataStore.data.map { it[Keys.DETECTION_SENSITIVITY] ?: 0.5f }
         val soundOnSave: Flow<Boolean> = dataStore.data.map { it[Keys.SOUND_ON_SAVE] ?: true }
 
+        val autoFollowConfig: Flow<AutoFollowConfig> =
+            dataStore.data.map { prefs ->
+                AutoFollowConfig(
+                    enabled = prefs[Keys.AUTO_FOLLOW_ENABLED] ?: false,
+                    smoothingAlpha = prefs[Keys.AUTO_FOLLOW_ALPHA] ?: AutoFollowConfig.DEFAULT_ALPHA,
+                )
+            }
+
         suspend fun updateGoalZoneSet(zoneSet: GoalZoneSet) {
             dataStore.edit { prefs ->
                 val a = zoneSet.goalA
@@ -163,5 +174,13 @@ class UserPreferencesRepository
 
         suspend fun updateSoundOnSave(enabled: Boolean) {
             dataStore.edit { it[Keys.SOUND_ON_SAVE] = enabled }
+        }
+
+        suspend fun updateAutoFollowEnabled(enabled: Boolean) {
+            dataStore.edit { it[Keys.AUTO_FOLLOW_ENABLED] = enabled }
+        }
+
+        suspend fun updateAutoFollowAlpha(alpha: Float) {
+            dataStore.edit { it[Keys.AUTO_FOLLOW_ALPHA] = alpha }
         }
     }
