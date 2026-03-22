@@ -7,14 +7,21 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +33,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -34,17 +42,22 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Forward5
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay5
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -53,6 +66,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -66,14 +80,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
@@ -81,13 +94,19 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.navigation.NavController
 import com.highlightcam.app.R
 import com.highlightcam.app.navigation.Routes
+import com.highlightcam.app.ui.components.GhostButton
+import com.highlightcam.app.ui.components.HCIconButton
+import com.highlightcam.app.ui.components.PrimaryButton
+import com.highlightcam.app.ui.theme.HC
+import com.highlightcam.app.ui.theme.HCType
+import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-private val GreenColor = Color(0xFF00FF88)
 
 @Suppress("LongMethod")
 @Composable
@@ -106,34 +125,41 @@ fun LibraryScreen(
         return
     }
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(Color(0xFF080808))
-                .windowInsetsPadding(WindowInsets.statusBars),
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(HC.bg)
+            .windowInsetsPadding(WindowInsets.statusBars),
     ) {
-        LibraryTopBar(
-            sortOrder = sortOrder,
-            onSortChanged = viewModel::setSortOrder,
-            onBack = { navController.popBackStack() },
-        )
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.s24, vertical = Spacing.s24),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HCIconButton(Icons.AutoMirrored.Filled.ArrowBack, onClick = { navController.popBackStack() })
+                Spacer(Modifier.width(Spacing.s16))
+                Text("Highlights", style = HCType.heading, color = HC.white, modifier = Modifier.weight(1f))
+                HCIconButton(Icons.Filled.Sort, onClick = { viewModel.setSortOrder(nextSort(sortOrder)) })
+            }
 
-        when (val state = uiState) {
-            is LibraryUiState.Loading -> LoadingState()
-            is LibraryUiState.Empty ->
-                EmptyState(onStartRecording = {
-                    navController.navigate(Routes.RECORDING) {
-                        popUpTo(Routes.LIBRARY) { inclusive = true }
-                    }
-                })
-            is LibraryUiState.Error -> ErrorState(state.message)
-            is LibraryUiState.Loaded ->
-                ClipGrid(
-                    clips = state.clips,
-                    onClipTap = { playerClip = it },
-                    onClipLongPress = { selectedClip = it },
-                )
+            when (val state = uiState) {
+                is LibraryUiState.Loading -> LoadingState()
+                is LibraryUiState.Empty ->
+                    EmptyState(
+                        onStartRecording = {
+                            navController.navigate(Routes.RECORDING) { popUpTo(Routes.LIBRARY) { inclusive = true } }
+                        },
+                    )
+                is LibraryUiState.Error -> ErrorState(state.message)
+                is LibraryUiState.Loaded ->
+                    ClipGrid(
+                        clips = state.clips,
+                        onClipTap = { playerClip = it },
+                        onClipLongPress = { selectedClip = it },
+                    )
+            }
         }
     }
 
@@ -141,10 +167,11 @@ fun LibraryScreen(
         ClipDetailSheet(
             clip = selectedClip!!,
             onDismiss = { selectedClip = null },
-            onShare = { shareClip(navController.context, it) },
-            onDelete = {
-                showDeleteConfirm = true
+            onShare = {
+                shareClip(navController.context, it)
+                selectedClip = null
             },
+            onDelete = { showDeleteConfirm = true },
         )
     }
 
@@ -160,122 +187,72 @@ fun LibraryScreen(
     }
 }
 
-@Composable
-private fun LibraryTopBar(
-    sortOrder: SortOrder,
-    onSortChanged: (SortOrder) -> Unit,
-    onBack: () -> Unit,
-) {
-    var showSortMenu by remember { mutableStateOf(false) }
-
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Text("←", color = Color.White, fontSize = 20.sp)
-        }
-        Text(
-            stringResource(R.string.library_title),
-            style = MaterialTheme.typography.displaySmall,
-            color = Color.White,
-            modifier = Modifier.weight(1f),
-        )
-        Box {
-            TextButton(onClick = { showSortMenu = true }) {
-                Text("Sort", color = GreenColor, style = MaterialTheme.typography.labelLarge)
-            }
-            DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                SortOrder.entries.forEach { order ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                when (order) {
-                                    SortOrder.NEWEST -> stringResource(R.string.library_sort_newest)
-                                    SortOrder.OLDEST -> stringResource(R.string.library_sort_oldest)
-                                    SortOrder.LONGEST -> stringResource(R.string.library_sort_longest)
-                                },
-                                color = if (order == sortOrder) GreenColor else Color.White,
-                            )
-                        },
-                        onClick = {
-                            onSortChanged(order)
-                            showSortMenu = false
-                        },
-                    )
-                }
-            }
-        }
+private fun nextSort(current: SortOrder): SortOrder =
+    when (current) {
+        SortOrder.NEWEST -> SortOrder.OLDEST
+        SortOrder.OLDEST -> SortOrder.LONGEST
+        SortOrder.LONGEST -> SortOrder.NEWEST
     }
-}
 
 @Composable
 private fun LoadingState() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = GreenColor)
+    Box(Modifier.fillMaxSize(), Alignment.Center) {
+        CircularProgressIndicator(color = HC.green)
     }
 }
 
 @Composable
 private fun ErrorState(message: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(message, color = Color(0xFFFF3B3B), style = MaterialTheme.typography.bodyLarge)
+    Box(Modifier.fillMaxSize(), Alignment.Center) {
+        Text(message, color = HC.red, style = HCType.body)
     }
 }
 
 @Composable
 private fun EmptyState(onStartRecording: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-            SoccerFieldIllustration()
-            Spacer(modifier = Modifier.height(32.dp))
-            Text(
-                stringResource(R.string.library_empty_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+    Box(Modifier.fillMaxSize(), Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            SoccerPitchCanvas()
+            Spacer(Modifier.height(Spacing.s32))
+            Text("No highlights yet", style = HCType.title, color = HC.white)
+            Spacer(Modifier.height(Spacing.s8))
             Text(
                 stringResource(R.string.library_empty_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.6f),
+                style = HCType.body,
+                color = HC.white60,
                 textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = Spacing.s64),
             )
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = onStartRecording,
-                colors = ButtonDefaults.buttonColors(containerColor = GreenColor, contentColor = Color(0xFF080808)),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-            ) {
-                Text(stringResource(R.string.library_start_recording), style = MaterialTheme.typography.labelLarge)
-            }
+            Spacer(Modifier.height(Spacing.s40))
+            PrimaryButton("Start Recording", onClick = onStartRecording, fixedWidth = 180.dp)
         }
     }
 }
 
 @Composable
-private fun SoccerFieldIllustration() {
-    val lineColor = Color(0xFF1A1A1A)
-    androidx.compose.foundation.Canvas(modifier = Modifier.size(200.dp, 130.dp)) {
-        val s = Stroke(width = 2.dp.toPx())
-        drawRect(color = lineColor, style = s)
-        drawLine(lineColor, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), strokeWidth = 2.dp.toPx())
-        drawCircle(color = lineColor, radius = size.height * 0.2f, center = Offset(size.width / 2, size.height / 2), style = s)
-        drawRect(lineColor, topLeft = Offset(0f, size.height * 0.25f), size = Size(size.width * 0.18f, size.height * 0.5f), style = s)
-        drawRect(
-            lineColor,
-            topLeft = Offset(size.width * 0.82f, size.height * 0.25f),
-            size = Size(size.width * 0.18f, size.height * 0.5f),
-            style = s,
-        )
-        drawRect(lineColor, topLeft = Offset(0f, size.height * 0.35f), size = Size(size.width * 0.08f, size.height * 0.3f), style = s)
-        drawRect(
-            lineColor,
-            topLeft = Offset(size.width * 0.92f, size.height * 0.35f),
-            size = Size(size.width * 0.08f, size.height * 0.3f),
-            style = s,
-        )
+private fun SoccerPitchCanvas() {
+    val lineColor = HC.white10
+    androidx.compose.foundation.Canvas(Modifier.size(280.dp, 175.dp)) {
+        val s = Stroke(1.dp.toPx())
+        drawRect(lineColor, style = s)
+        drawLine(lineColor, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), 1.dp.toPx())
+        drawCircle(lineColor, 40.dp.toPx(), center, style = s)
+        drawCircle(lineColor, 1.5.dp.toPx(), center)
+        val penW = size.width * 0.183f
+        val penH = size.height * 0.44f
+        val penTop = (size.height - penH) / 2
+        drawRect(lineColor, Offset(0f, penTop), Size(penW, penH), style = s)
+        drawRect(lineColor, Offset(size.width - penW, penTop), Size(penW, penH), style = s)
+        val gaW = size.width * 0.07f
+        val gaH = size.height * 0.22f
+        val gaTop = (size.height - gaH) / 2
+        drawRect(lineColor, Offset(0f, gaTop), Size(gaW, gaH), style = s)
+        drawRect(lineColor, Offset(size.width - gaW, gaTop), Size(gaW, gaH), style = s)
+        val gW = 4.dp.toPx()
+        val gH = size.height * 0.12f
+        val gTop = (size.height - gH) / 2
+        drawRect(lineColor, Offset(-gW / 2, gTop), Size(gW, gH), style = s)
+        drawRect(lineColor, Offset(size.width - gW / 2, gTop), Size(gW, gH), style = s)
     }
 }
 
@@ -288,9 +265,9 @@ private fun ClipGrid(
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(Spacing.s20),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         items(clips, key = { it.id }) { clip ->
             ClipCell(
@@ -312,21 +289,14 @@ private fun ClipCell(
 ) {
     val context = LocalContext.current
     var thumbnail by remember(clip.id) { mutableStateOf<ImageBitmap?>(null) }
-
-    LaunchedEffect(clip.uri) {
-        thumbnail =
-            withContext(Dispatchers.IO) {
-                loadThumbnail(context, clip.uri)
-            }
-    }
+    LaunchedEffect(clip.uri) { thumbnail = withContext(Dispatchers.IO) { loadThumbnail(context, clip.uri) } }
 
     Column(modifier = modifier) {
         Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(8.dp)),
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(Radii.r12)),
         ) {
             if (thumbnail != null) {
                 androidx.compose.foundation.Image(
@@ -336,31 +306,24 @@ private fun ClipCell(
                     contentScale = ContentScale.Crop,
                 )
             } else {
-                ShimmerBox(modifier = Modifier.fillMaxSize())
+                ShimmerBox(Modifier.fillMaxSize())
             }
-
             Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(Radii.r100))
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
             ) {
-                Text(
-                    formatDuration(clip.durationMs),
-                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                    color = Color.White,
-                )
+                Text(formatDuration(clip.durationMs), style = HCType.micro, color = HC.white)
             }
         }
-
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             formatDate(clip.dateAdded),
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.5f),
+            style = HCType.micro,
+            color = HC.white60,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -371,20 +334,19 @@ private fun ClipCell(
 private fun ShimmerBox(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "shimmer")
     val offset by transition.animateFloat(
-        initialValue = -300f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
-        label = "shimmer_offset",
+        -300f,
+        1000f,
+        infiniteRepeatable(tween(1400, easing = LinearEasing)),
+        label = "shim_off",
     )
     Box(
-        modifier =
-            modifier.background(
-                Brush.linearGradient(
-                    colors = listOf(Color(0xFF1A1A1A), Color(0xFF2A2A2A), Color(0xFF1A1A1A)),
-                    start = Offset(offset, 0f),
-                    end = Offset(offset + 300f, 0f),
-                ),
+        modifier.background(
+            Brush.linearGradient(
+                listOf(HC.surface, HC.surfaceRaised, HC.surface),
+                start = Offset(offset, 0f),
+                end = Offset(offset + 300f, 0f),
             ),
+        ),
     )
 }
 
@@ -399,36 +361,30 @@ private fun ClipDetailSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
-        containerColor = Color(0xFF121212),
+        containerColor = HC.surface,
     ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
-            Text(clip.displayName, style = MaterialTheme.typography.titleSmall, color = Color.White)
-            Spacer(modifier = Modifier.height(4.dp))
+        Column(Modifier.padding(horizontal = Spacing.s20).padding(bottom = Spacing.s32)) {
+            Text(clip.displayName, style = HCType.title, color = HC.white)
+            Spacer(Modifier.height(Spacing.s4))
             Text(
-                "${formatDate(clip.dateAdded)}  •  ${formatFileSize(clip.sizeBytes)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.5f),
+                "${formatDate(clip.dateAdded)}  ·  ${formatFileSize(clip.sizeBytes)}",
+                style = HCType.micro,
+                color = HC.white60,
             )
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(
-                onClick = {
-                    onShare(clip)
-                    onDismiss()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = GreenColor, contentColor = Color(0xFF080808)),
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                Text(stringResource(R.string.library_share))
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = { onDelete(clip) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3B3B), contentColor = Color.White),
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                Text(stringResource(R.string.library_delete))
+            Spacer(Modifier.height(Spacing.s32))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s12)) {
+                GhostButton(
+                    stringResource(R.string.library_share),
+                    onClick = { onShare(clip) },
+                    modifier = Modifier.weight(1f),
+                )
+                GhostButton(
+                    stringResource(R.string.library_delete),
+                    onClick = { onDelete(clip) },
+                    modifier = Modifier.weight(1f),
+                    borderColor = HC.red.copy(alpha = 0.4f),
+                    textColor = HC.red,
+                )
             }
         }
     }
@@ -443,14 +399,8 @@ private fun DeleteConfirmDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.library_delete_title)) },
         text = { Text(stringResource(R.string.library_delete_body)) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(stringResource(R.string.library_delete), color = Color(0xFFFF3B3B))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.library_delete), color = HC.red) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -480,28 +430,146 @@ private fun FullScreenPlayer(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    var controlsVisible by remember { mutableStateOf(true) }
+    var lastInteraction by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var isPlaying by remember { mutableStateOf(true) }
+    var currentPosition by remember { mutableLongStateOf(0L) }
+    var duration by remember { mutableLongStateOf(1L) }
+    var seekEvent by remember { mutableStateOf<Pair<Float, Boolean>?>(null) }
+
+    LaunchedEffect(lastInteraction) {
+        delay(3000)
+        controlsVisible = false
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentPosition = player.currentPosition
+            duration = player.duration.coerceAtLeast(1)
+            isPlaying = player.isPlaying
+            delay(200)
+        }
+    }
+
+    LaunchedEffect(seekEvent) {
+        if (seekEvent != null) {
+            delay(350)
+            seekEvent = null
+        }
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        controlsVisible = !controlsVisible
+                        lastInteraction = System.currentTimeMillis()
+                    },
+                    onDoubleTap = { offset ->
+                        lastInteraction = System.currentTimeMillis()
+                        controlsVisible = true
+                        val forward = offset.x > size.width / 2
+                        val seekMs = if (forward) 5000L else -5000L
+                        player.seekTo((player.currentPosition + seekMs).coerceIn(0, player.duration))
+                        seekEvent = (offset.x.toFloat() / size.width) to forward
+                    },
+                )
+            },
+    ) {
         AndroidView(
             factory = { ctx ->
                 androidx.media3.ui.PlayerView(ctx).apply {
                     this.player = player
-                    useController = true
-                    setShowRewindButton(true)
-                    setShowFastForwardButton(true)
+                    useController = false
                 }
             },
             modifier = Modifier.fillMaxSize(),
         )
 
-        IconButton(
-            onClick = onBack,
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(8.dp),
+        AnimatedVisibility(
+            visible = seekEvent != null,
+            enter = scaleIn(initialScale = 0.6f) + fadeIn(),
+            exit = scaleOut(targetScale = 1.3f) + fadeOut(),
+            modifier = Modifier.align(Alignment.Center),
         ) {
-            Text("←", color = Color.White, fontSize = 24.sp)
+            seekEvent?.let { (_, forward) ->
+                Icon(
+                    if (forward) Icons.Filled.Forward5 else Icons.Filled.Replay5,
+                    null,
+                    tint = HC.white,
+                    modifier =
+                        Modifier
+                            .size(36.dp)
+                            .padding(start = if (forward) Spacing.s64 else 0.dp, end = if (!forward) Spacing.s64 else 0.dp),
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(500)),
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                HCIconButton(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    onClick = onBack,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                            .padding(Spacing.s20),
+                )
+
+                Box(
+                    Modifier
+                        .size(64.dp)
+                        .align(Alignment.Center)
+                        .clip(CircleShape)
+                        .background(HC.white10)
+                        .clickable {
+                            if (player.isPlaying) player.pause() else player.play()
+                            lastInteraction = System.currentTimeMillis()
+                        },
+                    Alignment.Center,
+                ) {
+                    Icon(
+                        if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        null,
+                        tint = HC.white,
+                        modifier = Modifier.size(36.dp),
+                    )
+                }
+
+                Column(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(start = Spacing.s20, end = Spacing.s20, bottom = Spacing.s32),
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(bottom = Spacing.s8), Arrangement.SpaceBetween) {
+                        Text(formatDuration(currentPosition), style = HCType.micro, color = HC.white)
+                        Text(formatDuration(duration), style = HCType.micro, color = HC.white.copy(alpha = 0.4f))
+                    }
+                    Slider(
+                        value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+                        onValueChange = { frac ->
+                            player.seekTo((frac * duration).toLong())
+                            lastInteraction = System.currentTimeMillis()
+                        },
+                        colors =
+                            SliderDefaults.colors(
+                                thumbColor = Color.Transparent,
+                                activeTrackColor = HC.green,
+                                inactiveTrackColor = HC.white20,
+                            ),
+                    )
+                }
+            }
         }
     }
 }

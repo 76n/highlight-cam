@@ -2,14 +2,26 @@ package com.highlightcam.app.ui.setup
 
 import android.Manifest
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,16 +29,13 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,10 +46,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -48,7 +61,6 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -59,6 +71,13 @@ import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.domain.GoalZone
 import com.highlightcam.app.domain.NormalizedPoint
 import com.highlightcam.app.navigation.Routes
+import com.highlightcam.app.ui.components.FloatingChip
+import com.highlightcam.app.ui.components.GhostButton
+import com.highlightcam.app.ui.components.PrimaryButton
+import com.highlightcam.app.ui.theme.HC
+import com.highlightcam.app.ui.theme.HCType
+import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.Spacing
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -70,9 +89,6 @@ import kotlin.math.hypot
 interface CameraEntryPoint {
     fun cameraPreviewManager(): CameraPreviewManager
 }
-
-private val GoalAColor = Color(0xFF00FF88)
-private val GoalBColor = Color(0xFF4FC3F7)
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -97,7 +113,9 @@ fun SetupScreen(
         viewModel.navEvents.collect { event ->
             when (event) {
                 SetupNavEvent.NavigateToRecording ->
-                    navController.navigate(Routes.RECORDING) { popUpTo(Routes.SETUP) { inclusive = true } }
+                    navController.navigate(Routes.RECORDING) {
+                        popUpTo(Routes.SETUP) { inclusive = true }
+                    }
             }
         }
     }
@@ -112,11 +130,9 @@ fun SetupScreen(
             onAdvanceToConfirm = viewModel::advanceToConfirm,
             onConfirm = viewModel::confirmZones,
             onRedraw = viewModel::redraw,
-            onUseDefaults = viewModel::useDefaults,
-            onKeepCurrent = viewModel::keepCurrentZones,
         )
     } else {
-        PermissionRationale(onRequest = { cameraPermission.launchPermissionRequest() })
+        PermissionDenied(onRequest = { cameraPermission.launchPermissionRequest() })
     }
 }
 
@@ -131,8 +147,6 @@ private fun SetupContent(
     onAdvanceToConfirm: () -> Unit,
     onConfirm: () -> Unit,
     onRedraw: () -> Unit,
-    onUseDefaults: () -> Unit,
-    onKeepCurrent: () -> Unit,
 ) {
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -160,21 +174,47 @@ private fun SetupContent(
             onHandleDrag = onHandleDrag,
         )
 
-        TopScrim(uiState = uiState, onUseDefaults = onUseDefaults)
-
-        if (uiState.step == SetupStep.FINE_TUNING) {
-            Button(
-                onClick = onAdvanceToConfirm,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(bottom = 24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = GoalAColor, contentColor = Color(0xFF080808)),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Text("Done adjusting", modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        AnimatedVisibility(
+            visible = uiState.step != SetupStep.CONFIRMING,
+            enter = fadeIn() + slideInVertically { -it / 3 },
+            exit = fadeOut(),
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = Spacing.s24),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val instruction =
+                    when (uiState.step) {
+                        SetupStep.PLACING_A -> "Tap the 4 corners of Goal A"
+                        SetupStep.PLACING_B -> "Now tap the 4 corners of Goal B"
+                        SetupStep.FINE_TUNING -> "Drag to adjust"
+                        SetupStep.CONFIRMING -> ""
+                    }
+                FloatingChip { Text(instruction, style = HCType.label, color = HC.white) }
+                Spacer(Modifier.height(Spacing.s8))
+                val currentPoints =
+                    when (uiState.step) {
+                        SetupStep.PLACING_A -> uiState.goalAPoints.size
+                        SetupStep.PLACING_B -> uiState.goalBPoints.size
+                        else -> GoalZone.VERTEX_COUNT
+                    }
+                StepDots(filled = currentPoints)
             }
+        }
+
+        AnimatedVisibility(
+            visible = uiState.step == SetupStep.FINE_TUNING,
+            enter = fadeIn() + slideInVertically { it / 3 },
+            exit = fadeOut(),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(start = Spacing.s24, end = Spacing.s24, bottom = Spacing.s32),
+        ) {
+            PrimaryButton("Continue", onClick = onAdvanceToConfirm)
         }
     }
 
@@ -182,19 +222,37 @@ private fun SetupContent(
         ModalBottomSheet(
             onDismissRequest = onRedraw,
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            scrimColor = Color.Black.copy(alpha = 0.6f),
+            containerColor = HC.surface,
+            shape = RoundedCornerShape(topStart = Radii.r24, topEnd = Radii.r24),
+            dragHandle = null,
         ) {
             ConfirmSheet(
-                isReconfiguring = uiState.isReconfiguring,
+                goalAPoints = uiState.goalAPoints,
+                goalBPoints = uiState.goalBPoints,
                 onConfirm = onConfirm,
                 onRedraw = onRedraw,
-                onKeepCurrent = onKeepCurrent,
             )
         }
     }
 }
 
+@Composable
+private fun StepDots(filled: Int) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        repeat(GoalZone.VERTEX_COUNT) { i ->
+            val color =
+                when {
+                    i < filled -> HC.green
+                    i == filled -> HC.white
+                    else -> HC.white20
+                }
+            Box(Modifier.size(5.dp).clip(CircleShape).background(color))
+        }
+    }
+}
+
+@Suppress("LongMethod")
 @Composable
 private fun ZoneOverlay(
     state: SetupUiState,
@@ -217,9 +275,7 @@ private fun ZoneOverlay(
             SetupStep.FINE_TUNING, SetupStep.CONFIRMING ->
                 Modifier.pointerInput(state.goalAPoints, state.goalBPoints) {
                     detectDragGestures(
-                        onDragStart = { offset ->
-                            dragTarget = findClosestHandle(offset, state, w, h)
-                        },
+                        onDragStart = { offset -> dragTarget = findClosestHandle(offset, state, w, h) },
                         onDrag = { change, _ ->
                             dragTarget?.let { (goalId, idx, _) ->
                                 onHandleDrag(goalId, idx, change.position.x / w, change.position.y / h)
@@ -231,13 +287,27 @@ private fun ZoneOverlay(
                 }
         }
 
-    val dash = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+    val pulse = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by pulse.animateFloat(
+        1f,
+        1.2f,
+        infiniteRepeatable(tween(900, easing = EaseInOut), RepeatMode.Reverse),
+        label = "ps",
+    )
+    val pulseAlpha by pulse.animateFloat(
+        1f,
+        0.6f,
+        infiniteRepeatable(tween(900, easing = EaseInOut), RepeatMode.Reverse),
+        label = "pa",
+    )
 
     androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().then(tapOrDragModifier)) {
+        val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()), 0f)
+
         fun drawPolygon(
             points: List<NormalizedPoint>,
             color: Color,
-            isActive: Boolean,
+            isActiveGoal: Boolean,
         ) {
             if (points.isEmpty()) return
             val offsets = points.map { Offset(it.x * w, it.y * h) }
@@ -252,23 +322,27 @@ private fun ZoneOverlay(
                         null
                     }
                 next?.let {
-                    drawLine(color, offsets[i], it, strokeWidth = 2.dp.toPx(), pathEffect = if (isActive) null else dash)
+                    drawLine(
+                        color.copy(alpha = 0.6f),
+                        offsets[i],
+                        it,
+                        strokeWidth = 1.5.dp.toPx(),
+                        pathEffect = dashEffect,
+                    )
                 }
             }
 
-            val handleRadius = 6.dp.toPx()
-            val outerRadius = 15.dp.toPx()
-            offsets.forEach { pt ->
-                drawCircle(color.copy(alpha = 0.3f), outerRadius, pt)
-                drawCircle(color, handleRadius, pt)
+            offsets.forEachIndexed { idx, pt ->
+                val isLast = isActiveGoal && idx == offsets.lastIndex
+                val s = if (isLast) pulseScale else 1f
+                val a = if (isLast) pulseAlpha else 1f
+                drawCircle(color.copy(alpha = 0.25f * a), 10.dp.toPx() * s, pt)
+                drawCircle(color.copy(alpha = a), 5.dp.toPx() * s, pt)
             }
         }
 
-        val isPlacingA = state.step == SetupStep.PLACING_A
-        val isPlacingB = state.step == SetupStep.PLACING_B
-
-        drawPolygon(state.goalAPoints, GoalAColor, isPlacingA)
-        drawPolygon(state.goalBPoints, GoalBColor, isPlacingB)
+        drawPolygon(state.goalAPoints, HC.green, state.step == SetupStep.PLACING_A)
+        drawPolygon(state.goalBPoints, HC.blue, state.step == SetupStep.PLACING_B)
     }
 }
 
@@ -278,7 +352,6 @@ private fun findClosestHandle(
     w: Float,
     h: Float,
 ): Triple<String, Int, Offset>? {
-    val threshold = 44f
     var best: Triple<String, Int, Offset>? = null
     var bestDist = Float.MAX_VALUE
 
@@ -290,7 +363,7 @@ private fun findClosestHandle(
             val px = pt.x * w
             val py = pt.y * h
             val dist = hypot(offset.x - px, offset.y - py)
-            if (dist < bestDist && dist < threshold * 2) {
+            if (dist < bestDist && dist < 88f) {
                 bestDist = dist
                 best = Triple(goalId, i, Offset(px, py))
             }
@@ -303,111 +376,105 @@ private fun findClosestHandle(
 }
 
 @Composable
-private fun TopScrim(
-    uiState: SetupUiState,
-    onUseDefaults: () -> Unit,
-) {
-    val instruction =
-        when (uiState.step) {
-            SetupStep.PLACING_A -> "Tap 4 corners of Goal A (${uiState.goalAPoints.size}/4)"
-            SetupStep.PLACING_B -> "Tap 4 corners of Goal B (${uiState.goalBPoints.size}/4)"
-            SetupStep.FINE_TUNING -> "Drag corners to fine-tune"
-            SetupStep.CONFIRMING -> "Confirm your goal zones"
-        }
-
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(120.dp)
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.6f), Color.Transparent)))
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        Text(
-            "HighlightCam",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.7f),
-            modifier = Modifier.align(Alignment.TopStart),
-        )
-        Text(
-            instruction,
-            style = MaterialTheme.typography.bodyMedium.copy(letterSpacing = 0.05.em),
-            color = Color.White,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.align(Alignment.Center),
-        )
-        if (uiState.step == SetupStep.PLACING_A && uiState.goalAPoints.isEmpty()) {
-            Text(
-                "Use defaults",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.TopEnd).clickable(onClick = onUseDefaults).padding(4.dp),
-            )
-        }
-    }
-}
-
-@Composable
 private fun ConfirmSheet(
-    isReconfiguring: Boolean,
+    goalAPoints: List<NormalizedPoint>,
+    goalBPoints: List<NormalizedPoint>,
     onConfirm: () -> Unit,
     onRedraw: () -> Unit,
-    onKeepCurrent: () -> Unit,
 ) {
     Column(
-        modifier =
-            Modifier.fillMaxWidth().padding(
-                horizontal = 24.dp,
-            ).padding(top = 16.dp, bottom = 24.dp).windowInsetsPadding(WindowInsets.navigationBars),
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.s24)
+            .windowInsetsPadding(WindowInsets.navigationBars),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Both goals configured", style = MaterialTheme.typography.titleSmall, color = Color.White)
-        Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = onConfirm,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = GoalAColor, contentColor = Color(0xFF080808)),
-            shape = RoundedCornerShape(12.dp),
+        Box(
+            Modifier
+                .padding(top = Spacing.s16)
+                .size(32.dp, 3.dp)
+                .clip(RoundedCornerShape(Radii.r100))
+                .background(HC.white20),
+        )
+        Spacer(Modifier.height(Spacing.s24))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
         ) {
-            Text("Looks good", modifier = Modifier.padding(vertical = 4.dp))
+            ZonePreviewCanvas(goalAPoints, HC.green, "Goal A", Modifier.weight(1f))
+            ZonePreviewCanvas(goalBPoints, HC.blue, "Goal B", Modifier.weight(1f))
         }
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = onRedraw, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-            Text("Redraw", modifier = Modifier.padding(vertical = 4.dp))
-        }
-        if (isReconfiguring) {
-            Spacer(Modifier.height(12.dp))
-            TextButton(onClick = onKeepCurrent) { Text("Keep current zones", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
+        Spacer(Modifier.height(Spacing.s24))
+        PrimaryButton("Let's go", onClick = onConfirm)
+        Spacer(Modifier.height(Spacing.s12))
+        GhostButton("Redo", onClick = onRedraw)
+        Spacer(Modifier.height(Spacing.s24))
     }
 }
 
 @Composable
-private fun PermissionRationale(onRequest: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(32.dp), Alignment.Center) {
+private fun ZonePreviewCanvas(
+    points: List<NormalizedPoint>,
+    color: Color,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        androidx.compose.foundation.Canvas(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(Radii.r12))
+                .background(HC.bg),
+        ) {
+            if (points.size >= GoalZone.VERTEX_COUNT) {
+                val path =
+                    Path().apply {
+                        moveTo(points[0].x * size.width, points[0].y * size.height)
+                        for (i in 1 until points.size) lineTo(points[i].x * size.width, points[i].y * size.height)
+                        close()
+                    }
+                drawPath(path, color, style = Stroke(2.dp.toPx()))
+            }
+        }
+        Spacer(Modifier.height(Spacing.s8))
+        Text(label, style = HCType.micro, color = color)
+    }
+}
+
+@Composable
+private fun PermissionDenied(onRequest: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(HC.bg)
+            .padding(Spacing.s32),
+        Alignment.Center,
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            androidx.compose.foundation.Canvas(modifier = Modifier.size(72.dp)) {
-                drawCircle(GoalAColor.copy(alpha = 0.15f), size.minDimension / 2f)
-                drawCircle(GoalAColor, size.minDimension / 4f)
+            androidx.compose.foundation.Canvas(Modifier.size(80.dp)) {
+                val sw = 1.5.dp.toPx()
+                val c = HC.white20
+                val bodyL = size.width * 0.1f
+                val bodyT = size.height * 0.3f
+                val bodyW = size.width * 0.8f
+                val bodyH = size.height * 0.5f
+                drawRoundRect(c, Offset(bodyL, bodyT), Size(bodyW, bodyH), CornerRadius(6.dp.toPx()), style = Stroke(sw))
+                drawCircle(c, size.width * 0.15f, Offset(size.width / 2, size.height * 0.55f), style = Stroke(sw))
+                drawLine(c, Offset(size.width * 0.15f, size.height * 0.85f), Offset(size.width * 0.85f, size.height * 0.15f), sw)
             }
-            Spacer(Modifier.height(24.dp))
-            Text("Camera Access Required", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.s24))
+            Text("Camera access needed", style = HCType.title, color = HC.white)
+            Spacer(Modifier.height(Spacing.s12))
             Text(
-                "HighlightCam needs camera access to preview the pitch and detect goals.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "HighlightCam needs your camera to define the goal zones.",
+                style = HCType.body,
+                color = HC.white60,
                 textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = 260.dp),
             )
-            Spacer(Modifier.height(32.dp))
-            Button(
-                onClick = onRequest,
-                colors = ButtonDefaults.buttonColors(containerColor = GoalAColor, contentColor = Color(0xFF080808)),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Text("Grant Permission", modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-            }
+            Spacer(Modifier.height(Spacing.s32))
+            PrimaryButton("Allow Camera", onClick = onRequest, fixedWidth = 200.dp)
         }
     }
 }

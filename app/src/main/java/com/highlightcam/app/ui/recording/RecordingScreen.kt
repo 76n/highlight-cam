@@ -11,22 +11,27 @@ import android.view.HapticFeedbackConstants
 import android.view.WindowManager
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,14 +49,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -69,26 +74,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -98,17 +98,24 @@ import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.highlightcam.app.R
 import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.detection.DebugInfo
-import com.highlightcam.app.domain.GoalZone
 import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecorderState
 import com.highlightcam.app.navigation.Routes
+import com.highlightcam.app.ui.components.FloatingChip
+import com.highlightcam.app.ui.components.HCIconButton
+import com.highlightcam.app.ui.components.OverlayState
+import com.highlightcam.app.ui.components.PolygonOverlay
+import com.highlightcam.app.ui.components.PrimaryButton
+import com.highlightcam.app.ui.components.ZoneDisplay
 import com.highlightcam.app.ui.setup.CameraEntryPoint
+import com.highlightcam.app.ui.theme.HC
+import com.highlightcam.app.ui.theme.HCType
+import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.Spacing
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.delay
 
-private val AmberColor = Color(0xFFFFB347)
-private val GreenColor = Color(0xFF00FF88)
-private val GoalBColor = Color(0xFF4FC3F7)
+private enum class ChipMode { READY, RECORDING, LOW_STORAGE }
 
 @Suppress("LongMethod")
 @OptIn(ExperimentalPermissionsApi::class)
@@ -130,6 +137,7 @@ fun RecordingScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showDebugPanel by remember { mutableStateOf(false) }
     var showVisionDialog by remember { mutableStateOf(false) }
+    var showLowStorageDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val view = LocalView.current
@@ -157,9 +165,7 @@ fun RecordingScreen(
     LaunchedEffect(clipsSaved) {
         if (clipsSaved > 0) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.CONFIRM,
-                )
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
             } else {
                 view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             }
@@ -172,33 +178,45 @@ fun RecordingScreen(
         }
     }
 
-    LaunchedEffect(candidateDetected) { if (candidateDetected) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
-
-    LaunchedEffect(recorderState) {
-        if (recorderState is RecorderState.Error) snackbarHostState.showSnackbar((recorderState as RecorderState.Error).message)
+    LaunchedEffect(candidateDetected) {
+        if (candidateDetected) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
     }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }, containerColor = Color.Transparent) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            if (allGranted) {
-                RecordingContent(
-                    recorderState = recorderState, clipsSaved = clipsSaved, goalZoneSet = goalZoneSet,
-                    candidateDetected = candidateDetected, candidateGoalZoneId = candidateGoalZoneId,
-                    modelAvailable = modelAvailable, debugMode = debugMode, lowStorage = lowStorage,
-                    cameraPreviewManager = cameraPreviewManager,
-                    onStartRecording = viewModel::startRecording, onStopRecording = viewModel::stopRecording,
-                    onManualSave = viewModel::requestManualSave,
-                    onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
-                    onNavigateToLibrary = { navController.navigate(Routes.LIBRARY) },
-                    onShowVisionDialog = { showVisionDialog = true }, onShowDebugPanel = { showDebugPanel = true },
-                )
-            } else {
-                PermissionRequestScreen(onRequestPermissions = { permissionsState.launchMultiplePermissionRequest() })
-            }
+    LaunchedEffect(recorderState) {
+        if (recorderState is RecorderState.Error) {
+            snackbarHostState.showSnackbar((recorderState as RecorderState.Error).message)
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (allGranted) {
+            RecordingContent(
+                recorderState = recorderState,
+                clipsSaved = clipsSaved,
+                goalZoneSet = goalZoneSet,
+                candidateDetected = candidateDetected,
+                candidateGoalZoneId = candidateGoalZoneId,
+                modelAvailable = modelAvailable,
+                debugMode = debugMode,
+                lowStorage = lowStorage,
+                cameraPreviewManager = cameraPreviewManager,
+                onStartRecording = viewModel::startRecording,
+                onStopRecording = viewModel::stopRecording,
+                onManualSave = viewModel::requestManualSave,
+                onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
+                onNavigateToLibrary = { navController.navigate(Routes.LIBRARY) },
+                onShowVisionDialog = { showVisionDialog = true },
+                onShowDebugPanel = { showDebugPanel = true },
+                onShowLowStorageDialog = { showLowStorageDialog = true },
+            )
+        } else {
+            PermissionRequestScreen(onRequestPermissions = { permissionsState.launchMultiplePermissionRequest() })
+        }
+        SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+    }
+
     if (showVisionDialog) VisionOffDialog(onDismiss = { showVisionDialog = false })
+    if (showLowStorageDialog) LowStorageDialog(onDismiss = { showLowStorageDialog = false })
     if (showDebugPanel && debugMode) DebugPanel(debugInfo = debugInfo, onDismiss = { showDebugPanel = false })
 }
 
@@ -221,46 +239,136 @@ private fun RecordingContent(
     onNavigateToLibrary: () -> Unit,
     onShowVisionDialog: () -> Unit,
     onShowDebugPanel: () -> Unit,
+    onShowLowStorageDialog: () -> Unit,
 ) {
     val isRecording = recorderState is RecorderState.Recording || recorderState is RecorderState.SavingClip
     val isSaving = recorderState is RecorderState.SavingClip
+    val startedAt = (recorderState as? RecorderState.Recording)?.startedAt ?: 0L
     val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(isRecording) {
-        if (!isRecording) cameraPreviewManager.currentSurfaceProvider?.let { cameraPreviewManager.bindToLifecycle(lifecycleOwner, it) }
+        if (!isRecording) {
+            cameraPreviewManager.currentSurfaceProvider?.let {
+                cameraPreviewManager.bindToLifecycle(lifecycleOwner, it)
+            }
+        }
     }
+
+    val chipMode =
+        when {
+            lowStorage -> ChipMode.LOW_STORAGE
+            isRecording -> ChipMode.RECORDING
+            else -> ChipMode.READY
+        }
+
+    fun zoneState(zoneId: String): OverlayState =
+        when {
+            isSaving && candidateGoalZoneId == zoneId -> OverlayState.SAVE
+            candidateDetected && candidateGoalZoneId == zoneId -> OverlayState.CANDIDATE
+            else -> OverlayState.IDLE
+        }
 
     Box(modifier = Modifier.fillMaxSize()) {
         CameraPreview(cameraPreviewManager)
 
         if (isRecording && goalZoneSet != null) {
-            DualGoalZoneOverlay(
-                goalZoneSet = goalZoneSet,
-                candidateDetected = candidateDetected,
-                candidateGoalZoneId = candidateGoalZoneId,
+            PolygonOverlay(
+                zones =
+                    listOf(
+                        ZoneDisplay(goalZoneSet.goalA, HC.green, zoneState("a")),
+                        ZoneDisplay(goalZoneSet.goalB, HC.blue, zoneState("b")),
+                    ),
             )
         }
 
-        TopBar(recorderState = recorderState, onNavigateToSettings = onNavigateToSettings, onNavigateToLibrary = onNavigateToLibrary)
+        AnimatedVisibility(
+            visible = isSaving,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+        ) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = HC.green,
+                trackColor = Color.Transparent,
+            )
+        }
 
-        if (!modelAvailable && isRecording) {
-            VisionOffBadge(
-                modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.statusBars).padding(top = 52.dp),
-                onClick = onShowVisionDialog,
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.TopStart)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(start = Spacing.s20, top = Spacing.s20),
+        ) {
+            StatusChip(
+                mode = chipMode,
+                modifier = if (lowStorage) Modifier.clickable(onClick = onShowLowStorageDialog) else Modifier,
             )
+            AnimatedVisibility(
+                visible = isRecording,
+                enter = fadeIn() + slideInVertically { -it / 3 },
+                exit = fadeOut(),
+            ) {
+                Column {
+                    Spacer(Modifier.height(Spacing.s8))
+                    Timecode(startedAt)
+                }
+            }
+            AnimatedVisibility(
+                visible = !modelAvailable && isRecording,
+                enter = fadeIn() + slideInVertically { -it / 3 },
+                exit = fadeOut(),
+            ) {
+                FloatingChip(
+                    dotColor = HC.amber,
+                    modifier = Modifier.padding(top = Spacing.s8).clickable(onClick = onShowVisionDialog),
+                ) {
+                    Text("AUDIO ONLY", style = HCType.label, color = HC.amber)
+                }
+            }
         }
-        if (lowStorage && isRecording) {
-            LowStorageBanner(
-                modifier =
-                    Modifier.align(
-                        Alignment.TopCenter,
-                    ).windowInsetsPadding(WindowInsets.statusBars).padding(top = if (!modelAvailable) 80.dp else 52.dp),
-            )
+
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(end = Spacing.s20, top = Spacing.s20),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s8),
+        ) {
+            HCIconButton(Icons.Filled.Settings, onClick = onNavigateToSettings)
+            HCIconButton(Icons.Filled.GridView, onClick = onNavigateToLibrary)
         }
-        SavingBanner(visible = isSaving)
-        BottomControls(isRecording = isRecording, clipsSaved = clipsSaved, onToggleRecording = {
-            if (isRecording) onStopRecording() else onStartRecording()
-        }, onManualSave = onManualSave, onLongPressRecord = if (debugMode) onShowDebugPanel else null)
+
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(bottom = Spacing.s32),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(44.dp + Spacing.s24))
+                RecordButton(
+                    isRecording = isRecording,
+                    onClick = { if (isRecording) onStopRecording() else onStartRecording() },
+                    onLongClick = if (debugMode) onShowDebugPanel else null,
+                )
+                Spacer(Modifier.width(Spacing.s24))
+                Box(Modifier.size(44.dp)) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isRecording,
+                        enter = fadeIn(tween(250)) + slideInHorizontally(tween(250)) { it },
+                    ) {
+                        HCIconButton(Icons.Filled.BookmarkBorder, onClick = onManualSave)
+                    }
+                }
+            }
+            Spacer(Modifier.height(Spacing.s12))
+            SavedCount(count = clipsSaved)
+        }
     }
 }
 
@@ -268,10 +376,8 @@ private fun RecordingContent(
 private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
     val lifecycleOwner = LocalLifecycleOwner.current
     AndroidView(
-        factory = {
-                ctx ->
-            PreviewView(ctx).also {
-                    pv ->
+        factory = { ctx ->
+            PreviewView(ctx).also { pv ->
                 pv.implementationMode = PreviewView.ImplementationMode.PERFORMANCE
                 cameraPreviewManager.setSurfaceProvider(pv.surfaceProvider)
             }
@@ -285,137 +391,48 @@ private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
 }
 
 @Composable
-private fun DualGoalZoneOverlay(
-    goalZoneSet: GoalZoneSet,
-    candidateDetected: Boolean,
-    candidateGoalZoneId: String?,
-) {
-    val transition = rememberInfiniteTransition(label = "zone_shimmer")
-    val shimmerWidth by transition.animateFloat(2f, 4f, infiniteRepeatable(tween(300), RepeatMode.Reverse), label = "zone_sw")
-
-    val goalACandidateActive = candidateDetected && candidateGoalZoneId == "a"
-    val goalBCandidateActive = candidateDetected && candidateGoalZoneId == "b"
-
-    val goalAColor by animateColorAsState(
-        if (goalACandidateActive) AmberColor else GreenColor.copy(alpha = 0.4f),
-        tween(200),
-        label = "za_c",
-    )
-    val goalBColor by animateColorAsState(
-        if (goalBCandidateActive) AmberColor else GoalBColor.copy(alpha = 0.4f),
-        tween(200),
-        label = "zb_c",
-    )
-    val goalAStroke = if (goalACandidateActive) shimmerWidth else 1.5f
-    val goalBStroke = if (goalBCandidateActive) shimmerWidth else 1.5f
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        fun drawZonePath(
-            zone: GoalZone,
-            color: Color,
-            strokeDp: Float,
-        ) {
-            val pts = zone.toPoints()
-            if (pts.size < GoalZone.VERTEX_COUNT) return
-            val path =
-                Path().apply {
-                    moveTo(pts[0].x * size.width, pts[0].y * size.height)
-                    for (i in 1 until pts.size) lineTo(pts[i].x * size.width, pts[i].y * size.height)
-                    close()
-                }
-            drawPath(path, color, style = Stroke(width = strokeDp.dp.toPx()))
-        }
-        drawZonePath(goalZoneSet.goalA, goalAColor, goalAStroke)
-        drawZonePath(goalZoneSet.goalB, goalBColor, goalBStroke)
-    }
-}
-
-@Composable
-private fun VisionOffBadge(
+private fun StatusChip(
+    mode: ChipMode,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit,
 ) {
-    Box(
-        modifier.clip(
-            RoundedCornerShape(16.dp),
-        ).background(AmberColor.copy(alpha = 0.2f)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Text(
-            stringResource(R.string.recording_vision_off),
-            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.05.sp),
-            color = AmberColor,
-        )
-    }
-}
+    val dotPulse = rememberInfiniteTransition(label = "dot")
+    val dotAlpha by dotPulse.animateFloat(
+        1f,
+        0.25f,
+        infiniteRepeatable(tween(600), RepeatMode.Reverse),
+        label = "dot_a",
+    )
 
-@Composable
-private fun LowStorageBanner(modifier: Modifier = Modifier) {
-    Box(modifier.clip(RoundedCornerShape(16.dp)).background(AmberColor.copy(alpha = 0.2f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-        Text(stringResource(R.string.recording_low_storage), style = MaterialTheme.typography.labelSmall, color = AmberColor)
-    }
-}
-
-@Composable
-private fun VisionOffDialog(onDismiss: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, title = {
-        Text(stringResource(R.string.recording_vision_off_title))
-    }, text = {
-        Text(stringResource(R.string.recording_vision_off_body))
-    }, confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } })
-}
-
-@Composable
-private fun TopBar(
-    recorderState: RecorderState,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToLibrary: () -> Unit,
-) {
-    val isRecording = recorderState is RecorderState.Recording
-    val startedAt = (recorderState as? RecorderState.Recording)?.startedAt ?: 0L
-    Row(
-        Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RecIndicator(isActive = isRecording)
-        Spacer(Modifier.width(8.dp))
-        ElapsedTimer(isRecording = isRecording, startedAt = startedAt)
-        Spacer(Modifier.weight(1f))
-        IconButton(onClick = onNavigateToSettings) {
-            Icon(
-                ImageVector.vectorResource(R.drawable.ic_notification),
-                stringResource(R.string.settings),
-                tint = Color.White,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-        IconButton(onClick = onNavigateToLibrary) {
-            Icon(
-                ImageVector.vectorResource(R.drawable.ic_notification),
-                stringResource(R.string.library),
-                tint = Color.White,
-                modifier = Modifier.size(22.dp),
-            )
+    FloatingChip(modifier = modifier) {
+        Crossfade(targetState = mode, animationSpec = tween(200), label = "chip_xf") { state ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                when (state) {
+                    ChipMode.READY -> {
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(HC.white))
+                        Spacer(Modifier.width(Spacing.s8))
+                        Text("READY", style = HCType.label, color = HC.white60)
+                    }
+                    ChipMode.RECORDING -> {
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(HC.red.copy(alpha = dotAlpha)))
+                        Spacer(Modifier.width(Spacing.s8))
+                        Text("REC", style = HCType.label, color = HC.white)
+                    }
+                    ChipMode.LOW_STORAGE -> {
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(HC.amber))
+                        Spacer(Modifier.width(Spacing.s8))
+                        Text("LOW STORAGE", style = HCType.label, color = HC.amber)
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun RecIndicator(isActive: Boolean) {
-    val transition = rememberInfiniteTransition(label = "rec_pulse")
-    val alpha by transition.animateFloat(1f, 0.4f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "rec_alpha")
-    val displayAlpha = if (isActive) alpha else 1f
-    val dotColor = if (isActive) Color(0xFFFF3B3B) else Color.Gray
-    Box(Modifier.size(10.dp).drawBehind { drawCircle(dotColor.copy(alpha = displayAlpha), size.minDimension / 2f) })
-}
-
-@Composable
-private fun ElapsedTimer(
-    isRecording: Boolean,
-    startedAt: Long,
-) {
+private fun Timecode(startedAt: Long) {
     var elapsedSeconds by remember { mutableIntStateOf(0) }
-    LaunchedEffect(isRecording, startedAt) {
-        if (isRecording && startedAt > 0) {
+    LaunchedEffect(startedAt) {
+        if (startedAt > 0) {
             while (true) {
                 elapsedSeconds = ((System.currentTimeMillis() - startedAt) / 1000).toInt()
                 delay(1000)
@@ -425,83 +442,10 @@ private fun ElapsedTimer(
         }
     }
     Text(
-        if (isRecording) "%02d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60) else stringResource(R.string.recording_timer_idle),
-        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 16.sp, letterSpacing = 0.05.sp),
-        color = Color.White,
+        "%02d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
+        style = HCType.nums,
+        color = HC.white,
     )
-}
-
-@Composable
-private fun SavingBanner(visible: Boolean) {
-    AnimatedVisibility(
-        visible = visible,
-        enter =
-            slideInVertically {
-                -it
-            } + fadeIn(),
-        exit =
-            slideOutVertically {
-                -it
-            } + fadeOut(),
-        modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 56.dp),
-    ) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 48.dp), contentAlignment = Alignment.Center) {
-            Column(
-                Modifier.clip(
-                    RoundedCornerShape(24.dp),
-                ).background(Color(0xFF1E1E1E).copy(alpha = 0.9f)).padding(horizontal = 20.dp, vertical = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(stringResource(R.string.recording_saving_clip), style = MaterialTheme.typography.bodySmall, color = Color.White)
-                Spacer(Modifier.height(6.dp))
-                LinearProgressIndicator(
-                    Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
-                    color = GreenColor,
-                    trackColor = Color(0xFF2C2C2C),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun BottomControls(
-    isRecording: Boolean,
-    clipsSaved: Int,
-    onToggleRecording: () -> Unit,
-    onManualSave: () -> Unit,
-    onLongPressRecord: (() -> Unit)?,
-) {
-    Column(
-        Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 32.dp),
-        Arrangement.Bottom,
-        Alignment.CenterHorizontally,
-    ) {
-        AnimatedVisibility(visible = clipsSaved > 0, enter = fadeIn(), exit = fadeOut()) {
-            Text(
-                stringResource(R.string.recording_clips_saved, clipsSaved),
-                style = MaterialTheme.typography.bodySmall.copy(letterSpacing = 0.05.sp),
-                color = Color.White.copy(alpha = 0.8f),
-                textAlign = TextAlign.Center,
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            Spacer(Modifier.width(56.dp))
-            RecordButton(isRecording, onToggleRecording, onLongPressRecord)
-            SaveButtonSlot(isRecording, onManualSave)
-        }
-    }
-}
-
-@Composable
-private fun SaveButtonSlot(
-    visible: Boolean,
-    onManualSave: () -> Unit,
-) {
-    Box(
-        Modifier.width(56.dp),
-    ) { AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) { ManualSaveButton(onManualSave) } }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -511,48 +455,97 @@ private fun RecordButton(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
 ) {
-    val scale by animateFloatAsState(if (isRecording) 0.9f else 1f, tween(300), label = "rec_btn_scale")
-    val buttonColor by animateColorAsState(if (isRecording) Color(0xFFFF3B3B) else Color.Transparent, tween(300), label = "rec_btn_color")
-    val borderColor by animateColorAsState(if (isRecording) Color(0xFFFF3B3B) else Color.White, tween(300), label = "rec_btn_border")
-    val strokeWidthPx = with(LocalDensity.current) { 3.dp.toPx() }
-    val innerCornerPx = with(LocalDensity.current) { if (isRecording) 6.dp.toPx() else 28.dp.toPx() }
-    val innerSizeFraction = if (isRecording) 0.42f else 0.75f
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (isPressed) 0.9f else 1f,
+        spring(dampingRatio = 0.5f, stiffness = 600f),
+        label = "rec_s",
+    )
+    val bgColor by animateColorAsState(
+        if (isRecording) HC.red else Color.Transparent,
+        tween(400),
+        label = "rec_bg",
+    )
+    val borderColor by animateColorAsState(
+        if (isRecording) HC.red else HC.white.copy(alpha = 0.4f),
+        tween(400),
+        label = "rec_brd",
+    )
+
     Box(
-        Modifier.size(72.dp).scale(scale).clip(CircleShape).combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        Modifier
+            .size(72.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(CircleShape)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
         Alignment.Center,
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            drawCircle(borderColor, size.minDimension / 2f, style = Stroke(strokeWidthPx))
-            val innerSize = size.minDimension * innerSizeFraction
-            val innerOffset = (size.minDimension - innerSize) / 2f
-            drawRoundRect(
-                if (isRecording) buttonColor else Color.White,
-                Offset(innerOffset, innerOffset),
-                Size(innerSize, innerSize),
-                CornerRadius(innerCornerPx),
-            )
+            drawCircle(bgColor, size.minDimension / 2f)
+            drawCircle(borderColor, size.minDimension / 2f, style = Stroke(2.dp.toPx()))
+        }
+        Crossfade(targetState = isRecording, animationSpec = tween(200), label = "rec_icon") { recording ->
+            Box(Modifier.fillMaxSize(), Alignment.Center) {
+                if (recording) {
+                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).background(HC.white))
+                } else {
+                    Box(Modifier.size(24.dp).clip(CircleShape).background(HC.white))
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun ManualSaveButton(onClick: () -> Unit) {
-    IconButton(onClick, Modifier.size(48.dp).padding(start = 8.dp)) {
-        Canvas(Modifier.size(24.dp)) {
-            drawRoundRect(
-                GreenColor,
-                Offset(size.width * 0.15f, size.height * 0.05f),
-                Size(size.width * 0.7f, size.height * 0.9f),
-                CornerRadius(3.dp.toPx()),
-            )
-            drawRoundRect(
-                Color(0xFF080808),
-                Offset(size.width * 0.25f, size.height * 0.05f),
-                Size(size.width * 0.5f, size.height * 0.35f),
-                CornerRadius(2.dp.toPx()),
-            )
+private fun SavedCount(count: Int) {
+    val scale = remember { Animatable(1f) }
+    LaunchedEffect(count) {
+        if (count > 0) {
+            scale.animateTo(1.3f, spring(dampingRatio = 0.5f, stiffness = 600f))
+            scale.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 600f))
         }
     }
+    AnimatedVisibility(visible = count > 0, enter = fadeIn()) {
+        Text(
+            "$count saved",
+            style = HCType.label,
+            color = HC.white60,
+            modifier =
+                Modifier.graphicsLayer {
+                    scaleX = scale.value
+                    scaleY = scale.value
+                },
+        )
+    }
+}
+
+@Composable
+private fun VisionOffDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.recording_vision_off_title)) },
+        text = { Text(stringResource(R.string.recording_vision_off_body)) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
+    )
+}
+
+@Composable
+private fun LowStorageDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Low storage") },
+        text = { Text(stringResource(R.string.recording_low_storage)) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -564,33 +557,28 @@ private fun DebugPanel(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF121212),
+        containerColor = HC.surface,
         tonalElevation = 0.dp,
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
-            Text(
-                stringResource(R.string.debug_title),
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(16.dp))
+        Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.s20).padding(bottom = Spacing.s32)) {
+            Text(stringResource(R.string.debug_title), style = HCType.title, color = HC.white, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(Spacing.s16))
             DebugRmsBar(debugInfo.currentRms, debugInfo.baselineRms)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.s8))
             DebugLabel("Baseline RMS", "%.4f".format(debugInfo.baselineRms))
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(Spacing.s12))
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s8)) {
                 DebugChip("Ball", debugInfo.ballDetected)
                 DebugChip("In Zone", debugInfo.ballInZone)
                 DebugChip("Model", debugInfo.modelAvailable)
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.s8))
             DebugLabel("Players in zone", debugInfo.playerCountInZone.toString())
             DebugLabel("State", debugInfo.stateMachineState)
             if (debugInfo.lastEventReason.isNotEmpty()) DebugLabel("Last event", debugInfo.lastEventReason)
-            Spacer(Modifier.height(12.dp))
-            Text("Inference (last 10)", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.s12))
+            Text("Inference (last 10)", style = HCType.micro, color = HC.white60)
+            Spacer(Modifier.height(Spacing.s4))
             InferenceSparkline(debugInfo.recentInferenceTimesMs, Modifier.fillMaxWidth().height(40.dp))
         }
     }
@@ -605,15 +593,15 @@ private fun DebugRmsBar(
     val fraction = (current / (spikeThreshold * 1.2f)).coerceIn(0f, 1f)
     val barColor =
         when {
-            current > spikeThreshold -> Color(0xFFFF3B3B)
-            current > baseline * 2f -> AmberColor
-            else -> GreenColor
+            current > spikeThreshold -> HC.red
+            current > baseline * 2f -> HC.amber
+            else -> HC.green
         }
     Column {
-        Text("RMS Level", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
-        Spacer(Modifier.height(4.dp))
-        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C))) {
-            Box(Modifier.fillMaxWidth(fraction).height(8.dp).clip(RoundedCornerShape(4.dp)).background(barColor))
+        Text("RMS Level", style = HCType.micro, color = HC.white60)
+        Spacer(Modifier.height(Spacing.s4))
+        Box(Modifier.fillMaxWidth().height(Spacing.s8).clip(RoundedCornerShape(Spacing.s4)).background(HC.surfaceRaised)) {
+            Box(Modifier.fillMaxWidth(fraction).height(Spacing.s8).clip(RoundedCornerShape(Spacing.s4)).background(barColor))
         }
     }
 }
@@ -624,11 +612,12 @@ private fun DebugChip(
     active: Boolean,
 ) {
     Box(
-        Modifier.clip(
-            RoundedCornerShape(8.dp),
-        ).background(if (active) GreenColor.copy(alpha = 0.2f) else Color(0xFF2C2C2C)).padding(horizontal = 10.dp, vertical = 4.dp),
+        Modifier
+            .clip(RoundedCornerShape(Radii.r8))
+            .background(if (active) HC.greenDim else HC.surfaceRaised)
+            .padding(horizontal = 10.dp, vertical = Spacing.s4),
     ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) GreenColor else Color.Gray)
+        Text(label, style = HCType.micro, color = if (active) HC.green else HC.white60)
     }
 }
 
@@ -638,8 +627,8 @@ private fun DebugLabel(
     value: String,
 ) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), Arrangement.SpaceBetween) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
-        Text(value, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color.White)
+        Text(label, style = HCType.micro, color = HC.white60)
+        Text(value, style = HCType.micro.copy(fontFamily = FontFamily.Monospace), color = HC.white)
     }
 }
 
@@ -653,53 +642,51 @@ private fun InferenceSparkline(
         val maxTime = times.maxOrNull()?.toFloat()?.coerceAtLeast(1f) ?: return@Canvas
         val stepX = size.width / (times.size - 1)
         val path = Path()
-        times.forEachIndexed {
-                i,
-                time,
-            ->
+        times.forEachIndexed { i, time ->
             val x = i * stepX
             val y = size.height * (1f - time / maxTime)
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        drawPath(path, GreenColor, style = Stroke(2.dp.toPx()))
+        drawPath(path, HC.green, style = Stroke(2.dp.toPx()))
     }
 }
 
 @Composable
 private fun PermissionRequestScreen(onRequestPermissions: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(Color(0xFF080808)), Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-            Canvas(Modifier.size(64.dp)) {
-                drawCircle(GreenColor.copy(alpha = 0.15f), size.minDimension / 2f)
-                drawCircle(GreenColor, size.minDimension / 4f)
+    Box(Modifier.fillMaxSize().background(HC.bg), Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(Spacing.s32),
+        ) {
+            Canvas(Modifier.size(80.dp)) {
+                val sw = 1.5.dp.toPx()
+                val c = HC.white20
+                drawRoundRect(
+                    c,
+                    Offset(size.width * 0.1f, size.height * 0.3f),
+                    Size(size.width * 0.8f, size.height * 0.5f),
+                    CornerRadius(6.dp.toPx()),
+                    style = Stroke(sw),
+                )
+                drawCircle(c, size.width * 0.15f, Offset(size.width / 2, size.height * 0.55f), style = Stroke(sw))
+                drawLine(c, Offset(size.width * 0.15f, size.height * 0.85f), Offset(size.width * 0.85f, size.height * 0.15f), sw)
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(Spacing.s24))
             Text(
                 stringResource(R.string.permission_camera_mic_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
+                style = HCType.title,
+                color = HC.white,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.s12))
             Text(
                 stringResource(R.string.permission_camera_mic_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.7f),
+                style = HCType.body,
+                color = HC.white60,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(32.dp))
-            androidx.compose.material3.Button(
-                onRequestPermissions,
-                Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors =
-                    androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = GreenColor,
-                        contentColor = Color(0xFF080808),
-                    ),
-            ) {
-                Text(stringResource(R.string.permission_grant), style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.05.sp))
-            }
+            Spacer(Modifier.height(Spacing.s32))
+            PrimaryButton(stringResource(R.string.permission_grant), onClick = onRequestPermissions, fixedWidth = 200.dp)
         }
     }
 }

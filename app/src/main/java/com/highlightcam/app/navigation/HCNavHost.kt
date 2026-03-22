@@ -8,6 +8,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -23,7 +25,7 @@ object Routes {
     const val SETTINGS = "settings"
 }
 
-private const val TRANSITION_MS = 350
+private const val TRANSITION_MS = 300
 
 @Composable
 fun HCNavHost(
@@ -31,25 +33,28 @@ fun HCNavHost(
     startDestination: String,
     modifier: Modifier = Modifier,
 ) {
+    val density = LocalDensity.current
+    val offsetPx = with(density) { 60.dp.roundToPx() }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier,
         enterTransition = {
-            slideInHorizontally(animationSpec = tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { it } +
-                fadeIn(animationSpec = tween(TRANSITION_MS))
+            slideInHorizontally(tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { offsetPx } +
+                fadeIn(tween(TRANSITION_MS))
         },
         exitTransition = {
-            slideOutHorizontally(animationSpec = tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 3 } +
-                fadeOut(animationSpec = tween(TRANSITION_MS))
+            slideOutHorizontally(tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { -offsetPx } +
+                fadeOut(tween(TRANSITION_MS))
         },
         popEnterTransition = {
-            slideInHorizontally(animationSpec = tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 3 } +
-                fadeIn(animationSpec = tween(TRANSITION_MS))
+            slideInHorizontally(tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { -offsetPx } +
+                fadeIn(tween(TRANSITION_MS))
         },
         popExitTransition = {
-            slideOutHorizontally(animationSpec = tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { it } +
-                fadeOut(animationSpec = tween(TRANSITION_MS))
+            slideOutHorizontally(tween(TRANSITION_MS, easing = FastOutSlowInEasing)) { offsetPx } +
+                fadeOut(tween(TRANSITION_MS))
         },
     ) {
         composable(Routes.SETUP) { SetupScreen(navController) }
