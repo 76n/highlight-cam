@@ -96,8 +96,8 @@ class UserPreferencesRepository
         val recordingConfig: Flow<RecordingConfig> =
             dataStore.data.map { prefs ->
                 RecordingConfig(
-                    segmentDurationSeconds = prefs[Keys.SEGMENT_DURATION] ?: 3,
-                    bufferSegments = prefs[Keys.BUFFER_SEGMENTS] ?: 10,
+                    segmentDurationSeconds = prefs[Keys.SEGMENT_DURATION] ?: 5,
+                    bufferSegments = prefs[Keys.BUFFER_SEGMENTS] ?: 6,
                     secondsAfterEvent = prefs[Keys.SECONDS_AFTER_EVENT] ?: 10,
                     videoQuality =
                         prefs[Keys.VIDEO_QUALITY]?.let {

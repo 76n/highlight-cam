@@ -47,7 +47,7 @@ fun GhostButton(
         modifier =
             modifier
                 .then(if (fixedWidth != null) Modifier.width(fixedWidth) else Modifier.fillMaxWidth())
-                .height(48.dp)
+                .height(56.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale

@@ -46,7 +46,9 @@ class SettingsViewModel
         fun updateSecondsBefore(value: Int) {
             viewModelScope.launch {
                 val current = recordingConfig.value
-                userPreferencesRepository.updateRecordingConfig(current.copy(bufferSegments = value / current.segmentDurationSeconds))
+                userPreferencesRepository.updateRecordingConfig(
+                    current.copy(segmentDurationSeconds = SEGMENT_SECONDS, bufferSegments = value / SEGMENT_SECONDS),
+                )
             }
         }
 
@@ -70,5 +72,6 @@ class SettingsViewModel
             const val SENSITIVITY_CAREFUL = 0.2f
             const val SENSITIVITY_BALANCED = 0.5f
             const val SENSITIVITY_AGGRESSIVE = 0.8f
+            private const val SEGMENT_SECONDS = 5
         }
     }

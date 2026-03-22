@@ -50,11 +50,13 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
@@ -205,6 +207,7 @@ fun RecordingScreen(
                 onManualSave = viewModel::requestManualSave,
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
                 onNavigateToLibrary = { navController.navigate(Routes.LIBRARY) },
+                onNavigateToSetup = { navController.navigate(Routes.SETUP) },
                 onShowVisionDialog = { showVisionDialog = true },
                 onShowDebugPanel = { showDebugPanel = true },
                 onShowLowStorageDialog = { showLowStorageDialog = true },
@@ -237,6 +240,7 @@ private fun RecordingContent(
     onManualSave: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToLibrary: () -> Unit,
+    onNavigateToSetup: () -> Unit,
     onShowVisionDialog: () -> Unit,
     onShowDebugPanel: () -> Unit,
     onShowLowStorageDialog: () -> Unit,
@@ -271,7 +275,7 @@ private fun RecordingContent(
     Box(modifier = Modifier.fillMaxSize()) {
         CameraPreview(cameraPreviewManager)
 
-        if (isRecording && goalZoneSet != null) {
+        if (goalZoneSet != null) {
             val zoneColors = mapOf("a" to HC.green, "b" to HC.blue)
             PolygonOverlay(
                 zones =
@@ -338,6 +342,7 @@ private fun RecordingContent(
             verticalArrangement = Arrangement.spacedBy(Spacing.s8),
         ) {
             HCIconButton(Icons.Filled.Settings, onClick = onNavigateToSettings)
+            HCIconButton(Icons.Filled.Crop, onClick = onNavigateToSetup)
             HCIconButton(Icons.Filled.GridView, onClick = onNavigateToLibrary)
         }
 
@@ -357,12 +362,26 @@ private fun RecordingContent(
                     onLongClick = if (debugMode) onShowDebugPanel else null,
                 )
                 Spacer(Modifier.width(Spacing.s24))
-                Box(Modifier.size(44.dp)) {
+                Box(contentAlignment = Alignment.Center) {
                     androidx.compose.animation.AnimatedVisibility(
                         visible = isRecording,
                         enter = fadeIn(tween(250)) + slideInHorizontally(tween(250)) { it },
                     ) {
-                        HCIconButton(Icons.Filled.BookmarkBorder, onClick = onManualSave)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.clickable(onClick = onManualSave),
+                        ) {
+                            FloatingChip {
+                                Icon(
+                                    Icons.Filled.BookmarkAdd,
+                                    contentDescription = null,
+                                    tint = HC.white,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            Spacer(Modifier.height(Spacing.s4))
+                            Text("Save clip", style = HCType.micro, color = HC.white)
+                        }
                     }
                 }
             }

@@ -160,8 +160,8 @@ class UserPreferencesRepositoryTest {
     fun `recordingConfig returns defaults when nothing persisted`() =
         testScope.runTest {
             val config = repo.recordingConfig.first()
-            assertEquals(3, config.segmentDurationSeconds)
-            assertEquals(10, config.bufferSegments)
+            assertEquals(5, config.segmentDurationSeconds)
+            assertEquals(6, config.bufferSegments)
             assertEquals(10, config.secondsAfterEvent)
             assertEquals(VideoQuality.HD_720, config.videoQuality)
         }

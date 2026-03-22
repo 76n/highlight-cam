@@ -311,7 +311,7 @@ private fun ZoneOverlay(
                     detectTapGestures { offset -> onCanvasTap(offset.x / w, offset.y / h) }
                 }
             SetupStep.FINE_TUNING, SetupStep.CONFIRMING ->
-                Modifier.pointerInput(state.goalAPoints, state.goalBPoints) {
+                Modifier.pointerInput(state.step) {
                     detectDragGestures(
                         onDragStart = { offset -> dragTarget = findClosestHandle(offset, state, w, h) },
                         onDrag = { change, _ ->

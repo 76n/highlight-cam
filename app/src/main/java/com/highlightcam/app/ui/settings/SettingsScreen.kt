@@ -32,10 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -53,8 +51,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -63,11 +59,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.highlightcam.app.BuildConfig
 import com.highlightcam.app.R
-import com.highlightcam.app.domain.GoalZone
-import com.highlightcam.app.domain.GoalZoneSet
 import com.highlightcam.app.domain.RecordingConfig
 import com.highlightcam.app.domain.VideoQuality
-import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.ui.components.HCIconButton
 import com.highlightcam.app.ui.components.LocalWindowSizeClass
 import com.highlightcam.app.ui.theme.HC
@@ -79,7 +72,6 @@ private enum class SettingsSection(val label: String) {
     DETECTION("Detection"),
     CLIP_TIMING("Clip Timing"),
     VIDEO("Video"),
-    GOAL_ZONES("Goal Zones"),
     APP("App"),
 }
 
@@ -91,19 +83,12 @@ fun SettingsScreen(
 ) {
     val sensitivity by viewModel.sensitivity.collectAsState()
     val config by viewModel.recordingConfig.collectAsState()
-    val goalZoneSet by viewModel.goalZoneSet.collectAsState()
     val debugMode by viewModel.debugMode.collectAsState()
     val soundOnSave by viewModel.soundOnSave.collectAsState()
     var showAboutDialog by remember { mutableStateOf(false) }
 
     val windowSizeClass = LocalWindowSizeClass.current
     val isCompact = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Compact
-
-    val onReconfigure: () -> Unit = {
-        navController.navigate(Routes.SETUP) {
-            popUpTo(Routes.RECORDING) { inclusive = false }
-        }
-    }
 
     val insets = WindowInsets.safeDrawing.asPaddingValues()
     val layoutDir = LocalLayoutDirection.current
@@ -131,14 +116,12 @@ fun SettingsScreen(
                 CompactSettings(
                     sensitivity = sensitivity,
                     config = config,
-                    goalZoneSet = goalZoneSet,
                     debugMode = debugMode,
                     soundOnSave = soundOnSave,
                     onUpdateSensitivity = viewModel::updateSensitivity,
                     onUpdateSecondsBefore = { viewModel.updateSecondsBefore(it) },
                     onUpdateSecondsAfter = { viewModel.updateSecondsAfter(it) },
                     onUpdateQuality = viewModel::updateQuality,
-                    onReconfigure = onReconfigure,
                     onUpdateDebugMode = viewModel::updateDebugMode,
                     onUpdateSoundOnSave = viewModel::updateSoundOnSave,
                     onAboutClick = { showAboutDialog = true },
@@ -147,14 +130,12 @@ fun SettingsScreen(
                 ExpandedSettings(
                     sensitivity = sensitivity,
                     config = config,
-                    goalZoneSet = goalZoneSet,
                     debugMode = debugMode,
                     soundOnSave = soundOnSave,
                     onUpdateSensitivity = viewModel::updateSensitivity,
                     onUpdateSecondsBefore = { viewModel.updateSecondsBefore(it) },
                     onUpdateSecondsAfter = { viewModel.updateSecondsAfter(it) },
                     onUpdateQuality = viewModel::updateQuality,
-                    onReconfigure = onReconfigure,
                     onUpdateDebugMode = viewModel::updateDebugMode,
                     onUpdateSoundOnSave = viewModel::updateSoundOnSave,
                     onAboutClick = { showAboutDialog = true },
@@ -178,14 +159,12 @@ fun SettingsScreen(
 private fun CompactSettings(
     sensitivity: Float,
     config: RecordingConfig,
-    goalZoneSet: GoalZoneSet?,
     debugMode: Boolean,
     soundOnSave: Boolean,
     onUpdateSensitivity: (Float) -> Unit,
     onUpdateSecondsBefore: (Int) -> Unit,
     onUpdateSecondsAfter: (Int) -> Unit,
     onUpdateQuality: (VideoQuality) -> Unit,
-    onReconfigure: () -> Unit,
     onUpdateDebugMode: (Boolean) -> Unit,
     onUpdateSoundOnSave: (Boolean) -> Unit,
     onAboutClick: () -> Unit,
@@ -215,10 +194,6 @@ private fun CompactSettings(
             Spacer(Modifier.height(Spacing.s40))
         }
         item {
-            GoalZonesContent(goalZoneSet, onReconfigure)
-            Spacer(Modifier.height(Spacing.s40))
-        }
-        item {
             AppContent(debugMode, soundOnSave, onUpdateDebugMode, onUpdateSoundOnSave, onAboutClick)
         }
     }
@@ -229,14 +204,12 @@ private fun CompactSettings(
 private fun ExpandedSettings(
     sensitivity: Float,
     config: RecordingConfig,
-    goalZoneSet: GoalZoneSet?,
     debugMode: Boolean,
     soundOnSave: Boolean,
     onUpdateSensitivity: (Float) -> Unit,
     onUpdateSecondsBefore: (Int) -> Unit,
     onUpdateSecondsAfter: (Int) -> Unit,
     onUpdateQuality: (VideoQuality) -> Unit,
-    onReconfigure: () -> Unit,
     onUpdateDebugMode: (Boolean) -> Unit,
     onUpdateSoundOnSave: (Boolean) -> Unit,
     onAboutClick: () -> Unit,
@@ -285,7 +258,6 @@ private fun ExpandedSettings(
                     SettingsSection.DETECTION -> DetectionContent(sensitivity, onUpdateSensitivity)
                     SettingsSection.CLIP_TIMING -> ClipTimingContent(config, onUpdateSecondsBefore, onUpdateSecondsAfter)
                     SettingsSection.VIDEO -> VideoContent(config, onUpdateQuality)
-                    SettingsSection.GOAL_ZONES -> GoalZonesContent(goalZoneSet, onReconfigure)
                     SettingsSection.APP -> AppContent(debugMode, soundOnSave, onUpdateDebugMode, onUpdateSoundOnSave, onAboutClick)
                 }
             }
@@ -396,35 +368,6 @@ private fun VideoContent(
 }
 
 @Composable
-private fun GoalZonesContent(
-    goalZoneSet: GoalZoneSet?,
-    onReconfigure: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onReconfigure)
-            .padding(vertical = Spacing.s12),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TinyZoneCanvas(goalZoneSet?.goalA, HC.green)
-        if (goalZoneSet?.hasGoalB == true) {
-            Spacer(Modifier.width(Spacing.s8))
-            TinyZoneCanvas(goalZoneSet.goalB, HC.blue)
-        }
-        Spacer(Modifier.weight(1f))
-        Text("Reconfigure", style = HCType.label, color = HC.green)
-        Spacer(Modifier.width(Spacing.s4))
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            null,
-            tint = HC.green,
-            modifier = Modifier.size(16.dp),
-        )
-    }
-}
-
-@Composable
 private fun AppContent(
     debugMode: Boolean,
     soundOnSave: Boolean,
@@ -524,7 +467,7 @@ private fun ClipSlider(
         }
         Slider(
             value = value.toFloat(),
-            onValueChange = { onValueChange(it.toInt()) },
+            onValueChange = { onValueChange(Math.round(it)) },
             valueRange = range,
             steps = steps,
             colors =
@@ -537,32 +480,6 @@ private fun ClipSlider(
                 Box(Modifier.size(20.dp).clip(CircleShape).background(HC.white))
             },
         )
-    }
-}
-
-@Composable
-private fun TinyZoneCanvas(
-    zone: GoalZone?,
-    color: Color,
-) {
-    androidx.compose.foundation.Canvas(
-        Modifier
-            .size(32.dp, 20.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(HC.surfaceRaised),
-    ) {
-        if (zone != null) {
-            val pts = zone.toPoints()
-            if (pts.size >= GoalZone.VERTEX_COUNT) {
-                val path =
-                    Path().apply {
-                        moveTo(pts[0].x * size.width, pts[0].y * size.height)
-                        for (i in 1 until pts.size) lineTo(pts[i].x * size.width, pts[i].y * size.height)
-                        close()
-                    }
-                drawPath(path, color, style = Stroke(1.dp.toPx()))
-            }
-        }
     }
 }
 

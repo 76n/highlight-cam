@@ -78,8 +78,8 @@ enum class VideoQuality {
 }
 
 data class RecordingConfig(
-    val segmentDurationSeconds: Int = 3,
-    val bufferSegments: Int = 10,
+    val segmentDurationSeconds: Int = 5,
+    val bufferSegments: Int = 6,
     val secondsAfterEvent: Int = 10,
     val videoQuality: VideoQuality = VideoQuality.HD_720,
 ) {

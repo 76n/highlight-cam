@@ -104,63 +104,70 @@ class CircularBufferRecorder
             secondsBefore: Int,
             secondsAfter: Int,
         ): Result<Uri> {
-            val triggerTimeMs = System.currentTimeMillis()
-            val earliestNeeded = triggerTimeMs - secondsBefore * 1000L
-
-            val preSegments =
-                synchronized(segmentLock) {
-                    segments
-                        .filter { it.startTimeMs + it.durationMs > earliestNeeded }
-                        .toList()
-                }
-
-            saveInProgress = true
-            sessionRepository.updateRecorderState(RecorderState.SavingClip(0f))
-
-            if (secondsAfter > 0) {
-                delay(secondsAfter * 1000L)
+            if (saveInProgress) {
+                Timber.w("Save already in progress, ignoring")
+                return Result.failure(IllegalStateException("Save already in progress"))
             }
 
-            val postSegments =
-                synchronized(segmentLock) {
-                    segments.filter { it.startTimeMs >= triggerTimeMs }.toList()
+            try {
+                saveInProgress = true
+                sessionRepository.updateRecorderState(RecorderState.SavingClip(0f))
+
+                val triggerTimeMs = System.currentTimeMillis()
+                val earliestNeeded = triggerTimeMs - secondsBefore * 1000L
+
+                val preSegments =
+                    synchronized(segmentLock) {
+                        segments
+                            .filter { it.startTimeMs + it.durationMs > earliestNeeded }
+                            .toList()
+                    }
+
+                if (secondsAfter > 0) {
+                    delay(secondsAfter * 1000L)
                 }
 
-            saveInProgress = false
+                val postSegments =
+                    synchronized(segmentLock) {
+                        segments.filter { it.startTimeMs >= triggerTimeMs }.toList()
+                    }
 
-            val allSegments =
-                (preSegments + postSegments)
-                    .distinctBy { it.file.absolutePath }
-                    .sortedBy { it.startTimeMs }
+                val allSegments =
+                    (preSegments + postSegments)
+                        .distinctBy { it.file.absolutePath }
+                        .sortedBy { it.startTimeMs }
+                        .filter { it.file.exists() && it.file.length() > 0 }
 
-            if (allSegments.isEmpty()) {
+                if (allSegments.isEmpty()) {
+                    return Result.failure(IllegalStateException("No segments available"))
+                }
+
+                val segmentDurationsUs = allSegments.map { it.durationMs * 1000L }
+                val totalSegmentDurationUs = segmentDurationsUs.sum()
+                val desiredDurationUs = (secondsBefore + secondsAfter) * 1_000_000L
+                val trimLeadingUs = maxOf(0L, totalSegmentDurationUs - desiredDurationUs)
+
+                val result =
+                    clipAssembler.assemble(
+                        segmentFiles = allSegments.map { it.file },
+                        segmentDurationsUs = segmentDurationsUs,
+                        trimLeadingUs = trimLeadingUs,
+                    )
+
+                result.onSuccess {
+                    sessionRepository.incrementClipsSaved()
+                }
+
+                return result
+            } catch (e: Throwable) {
+                Timber.e(e, "Error saving clip")
+                return Result.failure(e)
+            } finally {
+                saveInProgress = false
                 sessionRepository.updateRecorderState(
                     RecorderState.Recording(recordingStartedAtMs),
                 )
-                return Result.failure(IllegalStateException("No segments available"))
             }
-
-            val segmentDurationsUs = allSegments.map { it.durationMs * 1000L }
-            val totalSegmentDurationUs = segmentDurationsUs.sum()
-            val desiredDurationUs = (secondsBefore + secondsAfter) * 1_000_000L
-            val trimLeadingUs = maxOf(0L, totalSegmentDurationUs - desiredDurationUs)
-
-            val result =
-                clipAssembler.assemble(
-                    segmentFiles = allSegments.map { it.file },
-                    segmentDurationsUs = segmentDurationsUs,
-                    trimLeadingUs = trimLeadingUs,
-                )
-
-            sessionRepository.updateRecorderState(
-                RecorderState.Recording(recordingStartedAtMs),
-            )
-
-            result.onSuccess {
-                sessionRepository.incrementClipsSaved()
-            }
-
-            return result
         }
 
         @SuppressLint("MissingPermission")

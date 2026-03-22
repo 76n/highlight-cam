@@ -152,21 +152,23 @@ fun LibraryScreen(
                 HCIconButton(Icons.Filled.Sort, onClick = { viewModel.setSortOrder(nextSort(sortOrder)) })
             }
 
-            when (val state = uiState) {
-                is LibraryUiState.Loading -> LoadingState()
-                is LibraryUiState.Empty ->
-                    EmptyState(
-                        onStartRecording = {
-                            navController.navigate(Routes.RECORDING) { popUpTo(Routes.LIBRARY) { inclusive = true } }
-                        },
-                    )
-                is LibraryUiState.Error -> ErrorState(state.message)
-                is LibraryUiState.Loaded ->
-                    ClipGrid(
-                        clips = state.clips,
-                        onClipTap = { playerClip = it },
-                        onClipLongPress = { selectedClip = it },
-                    )
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when (val state = uiState) {
+                    is LibraryUiState.Loading -> LoadingState()
+                    is LibraryUiState.Empty ->
+                        EmptyState(
+                            onStartRecording = {
+                                navController.navigate(Routes.RECORDING) { popUpTo(Routes.LIBRARY) { inclusive = true } }
+                            },
+                        )
+                    is LibraryUiState.Error -> ErrorState(state.message)
+                    is LibraryUiState.Loaded ->
+                        ClipGrid(
+                            clips = state.clips,
+                            onClipTap = { playerClip = it },
+                            onClipLongPress = { selectedClip = it },
+                        )
+                }
             }
         }
     }
@@ -275,6 +277,7 @@ private fun ClipGrid(
     val layoutDir = LocalLayoutDirection.current
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
+        modifier = Modifier.fillMaxSize(),
         contentPadding =
             PaddingValues(
                 start = insets.calculateLeftPadding(layoutDir) + Spacing.s20,
