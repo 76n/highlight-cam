@@ -92,7 +92,7 @@ import com.highlightcam.app.ui.components.GhostButton
 import com.highlightcam.app.ui.components.HCIconButton
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
-import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.Radius
 import com.highlightcam.app.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -130,19 +130,19 @@ fun LibraryScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding =
                 PaddingValues(
-                    top = insets.calculateTopPadding() + Spacing.s24,
-                    bottom = insets.calculateBottomPadding() + Spacing.s20,
-                    start = insets.calculateLeftPadding(layoutDir) + Spacing.s20,
-                    end = insets.calculateRightPadding(layoutDir) + Spacing.s20,
+                    top = insets.calculateTopPadding() + Spacing.xl,
+                    bottom = insets.calculateBottomPadding() + Spacing.l,
+                    start = insets.calculateLeftPadding(layoutDir) + Spacing.l,
+                    end = insets.calculateRightPadding(layoutDir) + Spacing.l,
                 ),
         ) {
             item(key = "header") {
                 Row(
-                    Modifier.fillMaxWidth().padding(bottom = Spacing.s24),
+                    Modifier.fillMaxWidth().padding(bottom = Spacing.xl),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     HCIconButton(Icons.AutoMirrored.Filled.ArrowBack, onClick = { navController.popBackStack() })
-                    Spacer(Modifier.width(Spacing.s16))
+                    Spacer(Modifier.width(Spacing.m))
                     Text("Highlights", style = HCType.heading, color = HC.white)
                 }
             }
@@ -228,7 +228,7 @@ private fun EmptyState() {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("No highlights yet", style = HCType.heading, color = HC.white)
-        Spacer(Modifier.height(Spacing.s8))
+        Spacer(Modifier.height(Spacing.xs))
         Text(
             "Highlights will appear here automatically during recording",
             style = HCType.body,
@@ -253,7 +253,7 @@ private fun ClipCell(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(Radii.r12)),
+                .clip(RoundedCornerShape(Radius.m)),
         ) {
             if (thumbnail != null) {
                 androidx.compose.foundation.Image(
@@ -268,15 +268,15 @@ private fun ClipCell(
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(Radii.r100))
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                    .padding(Spacing.xs)
+                    .clip(RoundedCornerShape(Radius.pill))
+                    .background(Color.Black.copy(alpha = 0.75f))
+                    .padding(horizontal = Spacing.xs, vertical = Spacing.xxs),
             ) {
                 Text(formatDuration(clip.durationMs), style = HCType.micro, color = HC.white)
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(Spacing.xs))
         Text(
             formatDate(clip.dateAdded),
             style = HCType.micro,
@@ -321,16 +321,16 @@ private fun ClipDetailSheet(
         containerColor = HC.surface,
         windowInsets = WindowInsets.safeDrawing,
     ) {
-        Column(Modifier.padding(horizontal = Spacing.s20).padding(bottom = Spacing.s32)) {
+        Column(Modifier.padding(horizontal = Spacing.l).padding(bottom = Spacing.xxl)) {
             Text(clip.displayName, style = HCType.title, color = HC.white)
-            Spacer(Modifier.height(Spacing.s4))
+            Spacer(Modifier.height(Spacing.xxs))
             Text(
                 "${formatDate(clip.dateAdded)}  ·  ${formatFileSize(clip.sizeBytes)}",
                 style = HCType.micro,
                 color = HC.white60,
             )
-            Spacer(Modifier.height(Spacing.s32))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s12)) {
+            Spacer(Modifier.height(Spacing.xxl))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 GhostButton(
                     stringResource(R.string.library_share),
                     onClick = { onShare(clip) },
@@ -456,7 +456,7 @@ private fun FullScreenPlayer(
                     modifier =
                         Modifier
                             .size(36.dp)
-                            .padding(start = if (forward) Spacing.s64 else 0.dp, end = if (!forward) Spacing.s64 else 0.dp),
+                            .padding(start = if (forward) Spacing.massive else 0.dp, end = if (!forward) Spacing.massive else 0.dp),
                 )
             }
         }
@@ -474,7 +474,7 @@ private fun FullScreenPlayer(
                         Modifier
                             .align(Alignment.TopStart)
                             .windowInsetsPadding(WindowInsets.safeDrawing)
-                            .padding(Spacing.s20),
+                            .padding(Spacing.l),
                 )
 
                 Box(
@@ -502,11 +502,11 @@ private fun FullScreenPlayer(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.safeDrawing)
-                        .padding(start = Spacing.s20, end = Spacing.s20, bottom = Spacing.s32),
+                        .padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.xxl),
                 ) {
-                    Row(Modifier.fillMaxWidth().padding(bottom = Spacing.s8), Arrangement.SpaceBetween) {
+                    Row(Modifier.fillMaxWidth().padding(bottom = Spacing.xs), Arrangement.SpaceBetween) {
                         Text(formatDuration(currentPosition), style = HCType.micro, color = HC.white)
-                        Text(formatDuration(duration), style = HCType.micro, color = HC.white.copy(alpha = 0.4f))
+                        Text(formatDuration(duration), style = HCType.micro, color = HC.white40)
                     }
                     Slider(
                         value = if (duration > 0) currentPosition.toFloat() / duration else 0f,

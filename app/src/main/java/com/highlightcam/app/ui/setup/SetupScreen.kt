@@ -83,7 +83,8 @@ import com.highlightcam.app.ui.components.GhostButton
 import com.highlightcam.app.ui.components.PrimaryButton
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
-import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.IconSize
+import com.highlightcam.app.ui.theme.Radius
 import com.highlightcam.app.ui.theme.Spacing
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -197,7 +198,7 @@ private fun SetupContent(
                 Modifier
                     .align(Alignment.TopCenter)
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(top = Spacing.s24),
+                    .padding(top = Spacing.xl),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 val instruction =
@@ -209,10 +210,10 @@ private fun SetupContent(
                         SetupStep.CONFIRMING -> ""
                     }
                 FloatingChip { Text(instruction, style = HCType.label, color = HC.white) }
-                Spacer(Modifier.height(Spacing.s8))
+                Spacer(Modifier.height(Spacing.xs))
                 SetupStepDots(uiState)
                 if (uiState.step == SetupStep.FINE_TUNING) {
-                    Spacer(Modifier.height(Spacing.s24))
+                    Spacer(Modifier.height(Spacing.xl))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable(onClick = onRedraw),
@@ -221,9 +222,9 @@ private fun SetupContent(
                             Icons.Filled.Replay,
                             contentDescription = null,
                             tint = HC.white60,
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(IconSize.s),
                         )
-                        Spacer(Modifier.width(Spacing.s4))
+                        Spacer(Modifier.width(Spacing.xxs))
                         Text("Start over", style = HCType.micro, color = HC.white60)
                     }
                 }
@@ -236,7 +237,7 @@ private fun SetupContent(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s12)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 PrimaryButton("Add Goal B", onClick = onAddGoalB, fixedWidth = 160.dp)
                 GhostButton("One goal only", onClick = onSkipGoalB, fixedWidth = 160.dp)
             }
@@ -250,7 +251,7 @@ private fun SetupContent(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(start = Spacing.s24, end = Spacing.s24, bottom = Spacing.s32),
+                    .padding(start = Spacing.xl, end = Spacing.xl, bottom = Spacing.xxl),
         ) {
             PrimaryButton("Continue", onClick = onAdvanceToConfirm)
         }
@@ -277,7 +278,7 @@ private fun SetupStepDots(uiState: SetupUiState) {
     val currentIndex = steps.indexOf(uiState.step)
     val goalBSkipped = !uiState.goalBEnabled && uiState.step.ordinal > SetupStep.DECIDING_SECOND_GOAL.ordinal
 
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         steps.forEachIndexed { i, step ->
             val color =
                 when {
@@ -456,29 +457,29 @@ private fun ConfirmOverlay(
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.s24),
+                .padding(horizontal = Spacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (goalBEnabled) {
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s),
                 ) {
                     ZonePreviewCanvas(goalAPoints, HC.green, "Goal A", Modifier.weight(1f))
                     ZonePreviewCanvas(goalBPoints, HC.blue, "Goal B", Modifier.weight(1f))
                 }
             } else {
                 ZonePreviewCanvas(goalAPoints, HC.green, "Goal A", Modifier.fillMaxWidth())
-                Spacer(Modifier.height(Spacing.s8))
+                Spacer(Modifier.height(Spacing.xs))
                 Text(
                     "Single goal mode \u2014 Goal B not configured",
                     style = HCType.micro,
                     color = HC.white60,
                 )
             }
-            Spacer(Modifier.height(Spacing.s24))
+            Spacer(Modifier.height(Spacing.xl))
             PrimaryButton("Let's go", onClick = onConfirm)
-            Spacer(Modifier.height(Spacing.s12))
+            Spacer(Modifier.height(Spacing.s))
             GhostButton("Redo", onClick = onRedraw)
         }
     }
@@ -497,7 +498,7 @@ private fun ZonePreviewCanvas(
                 .fillMaxWidth()
                 .heightIn(max = 180.dp)
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(Radii.r12))
+                .clip(RoundedCornerShape(Radius.m))
                 .background(HC.bg),
         ) {
             if (points.size >= GoalZone.VERTEX_COUNT) {
@@ -510,7 +511,7 @@ private fun ZonePreviewCanvas(
                 drawPath(path, color, style = Stroke(2.dp.toPx()))
             }
         }
-        Spacer(Modifier.height(Spacing.s8))
+        Spacer(Modifier.height(Spacing.xs))
         Text(label, style = HCType.micro, color = color)
     }
 }
@@ -522,7 +523,7 @@ private fun PermissionDenied(onRequest: () -> Unit) {
             .fillMaxSize()
             .background(HC.bg)
             .safeDrawingPadding()
-            .padding(Spacing.s32),
+            .padding(Spacing.xxl),
         Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -537,9 +538,9 @@ private fun PermissionDenied(onRequest: () -> Unit) {
                 drawCircle(c, size.width * 0.15f, Offset(size.width / 2, size.height * 0.55f), style = Stroke(sw))
                 drawLine(c, Offset(size.width * 0.15f, size.height * 0.85f), Offset(size.width * 0.85f, size.height * 0.15f), sw)
             }
-            Spacer(Modifier.height(Spacing.s24))
+            Spacer(Modifier.height(Spacing.xl))
             Text("Camera access needed", style = HCType.title, color = HC.white)
-            Spacer(Modifier.height(Spacing.s12))
+            Spacer(Modifier.height(Spacing.s))
             Text(
                 "HighlightCam needs your camera to define the goal zones.",
                 style = HCType.body,
@@ -547,7 +548,7 @@ private fun PermissionDenied(onRequest: () -> Unit) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.widthIn(max = 260.dp),
             )
-            Spacer(Modifier.height(Spacing.s32))
+            Spacer(Modifier.height(Spacing.xxl))
             PrimaryButton("Allow Camera", onClick = onRequest, fixedWidth = 200.dp)
         }
     }

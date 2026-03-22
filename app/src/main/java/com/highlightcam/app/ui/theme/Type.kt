@@ -29,7 +29,7 @@ private val InterFontFamily =
 object HCType {
     val nums =
         TextStyle(
-            fontFamily = InterFontFamily,
+            fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
             fontSize = 48.sp,
             letterSpacing = (-2).sp,

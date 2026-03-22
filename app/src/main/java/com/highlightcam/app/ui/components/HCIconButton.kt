@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.highlightcam.app.ui.theme.HC
-import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.Radius
 
 @Composable
 fun HCIconButton(
@@ -45,7 +45,7 @@ fun HCIconButton(
                     scaleX = scale
                     scaleY = scale
                 }
-                .clip(RoundedCornerShape(Radii.r12))
+                .clip(RoundedCornerShape(Radius.m))
                 .background(HC.white10)
                 .clickable(
                     interactionSource = interactionSource,
@@ -58,7 +58,7 @@ fun HCIconButton(
             icon,
             contentDescription = contentDescription,
             tint = HC.white,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(24.dp),
         )
     }
 }

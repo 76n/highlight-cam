@@ -113,7 +113,8 @@ import com.highlightcam.app.ui.components.ZoneDisplay
 import com.highlightcam.app.ui.setup.CameraEntryPoint
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
-import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.IconSize
+import com.highlightcam.app.ui.theme.Radius
 import com.highlightcam.app.ui.theme.Spacing
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.delay
@@ -298,8 +299,8 @@ private fun RecordingContent(
 
         AnimatedVisibility(
             visible = isSaving,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(250)),
+            exit = fadeOut(tween(200)),
             modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
         ) {
             LinearProgressIndicator(
@@ -314,7 +315,7 @@ private fun RecordingContent(
                 Modifier
                     .align(Alignment.TopStart)
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(start = Spacing.s20, top = Spacing.s20),
+                    .padding(start = Spacing.l, top = Spacing.l),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusChip(
@@ -323,11 +324,11 @@ private fun RecordingContent(
                 )
                 AnimatedVisibility(
                     visible = isRecording,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
+                    enter = fadeIn(tween(250)),
+                    exit = fadeOut(tween(200)),
                 ) {
                     Row {
-                        Spacer(Modifier.width(Spacing.s8))
+                        Spacer(Modifier.width(Spacing.xs))
                         Timecode(rememberedStartedAt)
                     }
                 }
@@ -339,7 +340,7 @@ private fun RecordingContent(
             ) {
                 FloatingChip(
                     dotColor = HC.amber,
-                    modifier = Modifier.padding(top = Spacing.s8).clickable(onClick = onShowVisionDialog),
+                    modifier = Modifier.padding(top = Spacing.xs).clickable(onClick = onShowVisionDialog),
                 ) {
                     Text("AUDIO ONLY", style = HCType.label, color = HC.amber)
                 }
@@ -351,8 +352,8 @@ private fun RecordingContent(
                 Modifier
                     .align(Alignment.TopEnd)
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(end = Spacing.s20, top = Spacing.s20),
-            verticalArrangement = Arrangement.spacedBy(Spacing.s8),
+                    .padding(end = Spacing.l, top = Spacing.l),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             HCIconButton(Icons.Filled.Settings, onClick = onNavigateToSettings)
             HCIconButton(Icons.Filled.Crop, onClick = onNavigateToSetup)
@@ -364,11 +365,11 @@ private fun RecordingContent(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(bottom = Spacing.s32),
+                    .padding(bottom = Spacing.xxl),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s24),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xl),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RecordButton(
@@ -381,7 +382,7 @@ private fun RecordingContent(
                     onClick = onManualSave,
                 )
             }
-            Spacer(Modifier.height(Spacing.s12))
+            Spacer(Modifier.height(Spacing.s))
             SavedCount(count = clipsSaved)
         }
     }
@@ -429,17 +430,17 @@ private fun StatusChip(
                 when (state) {
                     ChipMode.READY -> {
                         Box(Modifier.size(6.dp).clip(CircleShape).background(HC.white))
-                        Spacer(Modifier.width(Spacing.s8))
+                        Spacer(Modifier.width(Spacing.xs))
                         Text("READY", style = HCType.label, color = HC.white60)
                     }
                     ChipMode.RECORDING -> {
                         Box(Modifier.size(6.dp).clip(CircleShape).background(HC.red.copy(alpha = dotAlpha)))
-                        Spacer(Modifier.width(Spacing.s8))
+                        Spacer(Modifier.width(Spacing.xs))
                         Text("REC", style = HCType.label, color = HC.white)
                     }
                     ChipMode.LOW_STORAGE -> {
                         Box(Modifier.size(6.dp).clip(CircleShape).background(HC.amber))
-                        Spacer(Modifier.width(Spacing.s8))
+                        Spacer(Modifier.width(Spacing.xs))
                         Text("LOW STORAGE", style = HCType.label, color = HC.amber)
                     }
                 }
@@ -478,18 +479,18 @@ private fun RecordButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        if (isPressed) 0.9f else 1f,
-        spring(dampingRatio = 0.5f, stiffness = 600f),
+        if (isPressed) 0.93f else 1f,
+        spring(dampingRatio = 0.6f, stiffness = 500f),
         label = "rec_s",
     )
     val bgColor by animateColorAsState(
         if (isRecording) HC.red else HC.white10,
-        tween(400),
+        tween(200),
         label = "rec_bg",
     )
     val borderColor by animateColorAsState(
-        if (isRecording) HC.red else HC.white.copy(alpha = 0.4f),
-        tween(400),
+        if (isRecording) HC.red else HC.white40,
+        tween(200),
         label = "rec_brd",
     )
 
@@ -516,7 +517,7 @@ private fun RecordButton(
         Crossfade(targetState = isRecording, animationSpec = tween(200), label = "rec_icon") { recording ->
             Box(Modifier.fillMaxSize(), Alignment.Center) {
                 if (recording) {
-                    Box(Modifier.size(20.dp).clip(RoundedCornerShape(5.dp)).background(HC.white))
+                    Box(Modifier.size(20.dp).clip(RoundedCornerShape(Radius.s)).background(HC.white))
                 } else {
                     Box(Modifier.size(20.dp).clip(CircleShape).background(HC.white))
                 }
@@ -532,12 +533,12 @@ private fun CaptureButton(
 ) {
     val bgColor by animateColorAsState(
         if (enabled) HC.green else HC.white10,
-        tween(300),
+        tween(200),
         label = "cap_bg",
     )
     val iconTint by animateColorAsState(
-        if (enabled) HC.white else HC.white.copy(alpha = 0.4f),
-        tween(300),
+        if (enabled) HC.white else HC.white40,
+        tween(200),
         label = "cap_tint",
     )
     Box(
@@ -552,7 +553,7 @@ private fun CaptureButton(
             Icons.Filled.Flag,
             contentDescription = null,
             tint = iconTint,
-            modifier = Modifier.size(26.dp),
+            modifier = Modifier.size(IconSize.l),
         )
     }
 }
@@ -566,7 +567,7 @@ private fun SavedCount(count: Int) {
             scale.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 600f))
         }
     }
-    AnimatedVisibility(visible = count > 0, enter = fadeIn()) {
+    AnimatedVisibility(visible = count > 0, enter = fadeIn(tween(250)), exit = fadeOut(tween(200))) {
         Text(
             "$count saved",
             style = HCType.label,
@@ -613,25 +614,25 @@ private fun DebugPanel(
         tonalElevation = 0.dp,
         windowInsets = WindowInsets.safeDrawing,
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.s20).padding(bottom = Spacing.s32)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.l).padding(bottom = Spacing.xxl)) {
             Text(stringResource(R.string.debug_title), style = HCType.title, color = HC.white, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(Spacing.s16))
+            Spacer(Modifier.height(Spacing.m))
             DebugRmsBar(debugInfo.currentRms, debugInfo.baselineRms)
-            Spacer(Modifier.height(Spacing.s8))
+            Spacer(Modifier.height(Spacing.xs))
             DebugLabel("Baseline RMS", "%.4f".format(debugInfo.baselineRms))
-            Spacer(Modifier.height(Spacing.s12))
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s8)) {
+            Spacer(Modifier.height(Spacing.s))
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 DebugChip("Ball", debugInfo.ballDetected)
                 DebugChip("In Zone", debugInfo.ballInZone)
                 DebugChip("Model", debugInfo.modelAvailable)
             }
-            Spacer(Modifier.height(Spacing.s8))
+            Spacer(Modifier.height(Spacing.xs))
             DebugLabel("Players in zone", debugInfo.playerCountInZone.toString())
             DebugLabel("State", debugInfo.stateMachineState)
             if (debugInfo.lastEventReason.isNotEmpty()) DebugLabel("Last event", debugInfo.lastEventReason)
-            Spacer(Modifier.height(Spacing.s12))
+            Spacer(Modifier.height(Spacing.s))
             Text("Inference (last 10)", style = HCType.micro, color = HC.white60)
-            Spacer(Modifier.height(Spacing.s4))
+            Spacer(Modifier.height(Spacing.xxs))
             InferenceSparkline(debugInfo.recentInferenceTimesMs, Modifier.fillMaxWidth().height(40.dp))
         }
     }
@@ -652,9 +653,9 @@ private fun DebugRmsBar(
         }
     Column {
         Text("RMS Level", style = HCType.micro, color = HC.white60)
-        Spacer(Modifier.height(Spacing.s4))
-        Box(Modifier.fillMaxWidth().height(Spacing.s8).clip(RoundedCornerShape(Spacing.s4)).background(HC.surfaceRaised)) {
-            Box(Modifier.fillMaxWidth(fraction).height(Spacing.s8).clip(RoundedCornerShape(Spacing.s4)).background(barColor))
+        Spacer(Modifier.height(Spacing.xxs))
+        Box(Modifier.fillMaxWidth().height(Spacing.xs).clip(RoundedCornerShape(Spacing.xxs)).background(HC.surfaceRaised)) {
+            Box(Modifier.fillMaxWidth(fraction).height(Spacing.xs).clip(RoundedCornerShape(Spacing.xxs)).background(barColor))
         }
     }
 }
@@ -666,9 +667,9 @@ private fun DebugChip(
 ) {
     Box(
         Modifier
-            .clip(RoundedCornerShape(Radii.r8))
+            .clip(RoundedCornerShape(Radius.s))
             .background(if (active) HC.greenDim else HC.surfaceRaised)
-            .padding(horizontal = 10.dp, vertical = Spacing.s4),
+            .padding(horizontal = Spacing.s, vertical = Spacing.xxs),
     ) {
         Text(label, style = HCType.micro, color = if (active) HC.green else HC.white60)
     }
@@ -679,7 +680,7 @@ private fun DebugLabel(
     label: String,
     value: String,
 ) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), Arrangement.SpaceBetween) {
+    Row(Modifier.fillMaxWidth().padding(vertical = Spacing.xxs), Arrangement.SpaceBetween) {
         Text(label, style = HCType.micro, color = HC.white60)
         Text(value, style = HCType.micro.copy(fontFamily = FontFamily.Monospace), color = HC.white)
     }
@@ -709,7 +710,7 @@ private fun PermissionRequestScreen(onRequestPermissions: () -> Unit) {
     Box(Modifier.fillMaxSize().background(HC.bg).safeDrawingPadding(), Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(Spacing.s32),
+            modifier = Modifier.padding(Spacing.xxl),
         ) {
             Canvas(Modifier.size(80.dp)) {
                 val sw = 1.5.dp.toPx()
@@ -724,21 +725,21 @@ private fun PermissionRequestScreen(onRequestPermissions: () -> Unit) {
                 drawCircle(c, size.width * 0.15f, Offset(size.width / 2, size.height * 0.55f), style = Stroke(sw))
                 drawLine(c, Offset(size.width * 0.15f, size.height * 0.85f), Offset(size.width * 0.85f, size.height * 0.15f), sw)
             }
-            Spacer(Modifier.height(Spacing.s24))
+            Spacer(Modifier.height(Spacing.xl))
             Text(
                 stringResource(R.string.permission_camera_mic_title),
                 style = HCType.title,
                 color = HC.white,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(Spacing.s12))
+            Spacer(Modifier.height(Spacing.s))
             Text(
                 stringResource(R.string.permission_camera_mic_body),
                 style = HCType.body,
                 color = HC.white60,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(Spacing.s32))
+            Spacer(Modifier.height(Spacing.xxl))
             PrimaryButton(stringResource(R.string.permission_grant), onClick = onRequestPermissions, fixedWidth = 200.dp)
         }
     }

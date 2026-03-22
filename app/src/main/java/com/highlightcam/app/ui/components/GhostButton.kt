@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
-import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.Radius
 
 @Composable
 fun GhostButton(
@@ -47,13 +47,13 @@ fun GhostButton(
         modifier =
             modifier
                 .then(if (fixedWidth != null) Modifier.width(fixedWidth) else Modifier.fillMaxWidth())
-                .height(56.dp)
+                .height(48.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                 }
-                .clip(RoundedCornerShape(Radii.r16))
-                .border(1.dp, borderColor, RoundedCornerShape(Radii.r16))
+                .clip(RoundedCornerShape(Radius.l))
+                .border(1.dp, borderColor, RoundedCornerShape(Radius.l))
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,

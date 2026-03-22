@@ -19,15 +19,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
-import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.Radius
 
 @Composable
 fun PrimaryButton(
@@ -55,8 +53,8 @@ fun PrimaryButton(
                     scaleY = scale
                 }
                 .alpha(if (enabled) 1f else 0.35f)
-                .clip(RoundedCornerShape(Radii.r16))
-                .background(Brush.horizontalGradient(listOf(HC.green, Color(0xFF00C45F))))
+                .clip(RoundedCornerShape(Radius.l))
+                .background(HC.gradientGreen)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,

@@ -16,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.Radius
 import com.highlightcam.app.ui.theme.Spacing
 
 @Composable
@@ -28,9 +28,9 @@ fun FloatingChip(
     Box(
         modifier =
             modifier
-                .clip(RoundedCornerShape(Radii.r100))
+                .clip(RoundedCornerShape(Radius.pill))
                 .background(Color.Black.copy(alpha = 0.75f))
-                .padding(horizontal = Spacing.s12, vertical = 6.dp),
+                .padding(horizontal = Spacing.s, vertical = Spacing.xs),
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -44,7 +44,7 @@ fun FloatingChip(
                         .clip(CircleShape)
                         .background(dotColor),
                 )
-                Spacer(Modifier.width(Spacing.s8))
+                Spacer(Modifier.width(Spacing.xs))
             }
             content()
         }

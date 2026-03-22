@@ -69,7 +69,7 @@ import com.highlightcam.app.ui.components.HCIconButton
 import com.highlightcam.app.ui.components.LocalWindowSizeClass
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
-import com.highlightcam.app.ui.theme.Radii
+import com.highlightcam.app.ui.theme.Radius
 import com.highlightcam.app.ui.theme.Spacing
 
 private enum class SettingsSection(val label: String) {
@@ -105,16 +105,16 @@ fun SettingsScreen(
             .background(HC.bg),
     ) {
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(insets.calculateTopPadding() + Spacing.s24))
+            Spacer(Modifier.height(insets.calculateTopPadding() + Spacing.xl))
             Row(
                 Modifier.padding(
-                    start = insets.calculateLeftPadding(layoutDir) + Spacing.s24,
-                    end = insets.calculateRightPadding(layoutDir) + Spacing.s24,
+                    start = insets.calculateLeftPadding(layoutDir) + Spacing.xl,
+                    end = insets.calculateRightPadding(layoutDir) + Spacing.xl,
                 ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 HCIconButton(Icons.AutoMirrored.Filled.ArrowBack, onClick = { navController.popBackStack() })
-                Spacer(Modifier.width(Spacing.s16))
+                Spacer(Modifier.width(Spacing.m))
                 Text("Settings", style = HCType.heading, color = HC.white)
             }
 
@@ -190,15 +190,15 @@ private fun CompactSettings(
         modifier = Modifier.fillMaxSize(),
         contentPadding =
             PaddingValues(
-                top = Spacing.s40,
-                bottom = insets.calculateBottomPadding() + Spacing.s24,
-                start = insets.calculateLeftPadding(layoutDir) + Spacing.s24,
-                end = insets.calculateRightPadding(layoutDir) + Spacing.s24,
+                top = Spacing.xxxl,
+                bottom = insets.calculateBottomPadding() + Spacing.xl,
+                start = insets.calculateLeftPadding(layoutDir) + Spacing.xl,
+                end = insets.calculateRightPadding(layoutDir) + Spacing.xl,
             ),
     ) {
         item {
             DetectionContent(sensitivity, onUpdateSensitivity)
-            Spacer(Modifier.height(Spacing.s40))
+            Spacer(Modifier.height(Spacing.xxxl))
         }
         item {
             CameraContent(
@@ -207,15 +207,15 @@ private fun CompactSettings(
                 onUpdateEnabled = onUpdateAutoFollowEnabled,
                 onUpdateAlpha = onUpdateAutoFollowAlpha,
             )
-            Spacer(Modifier.height(Spacing.s40))
+            Spacer(Modifier.height(Spacing.xxxl))
         }
         item {
             ClipTimingContent(config, onUpdateSecondsBefore, onUpdateSecondsAfter)
-            Spacer(Modifier.height(Spacing.s40))
+            Spacer(Modifier.height(Spacing.xxxl))
         }
         item {
             VideoContent(config, onUpdateQuality)
-            Spacer(Modifier.height(Spacing.s40))
+            Spacer(Modifier.height(Spacing.xxxl))
         }
         item {
             AppContent(debugMode, soundOnSave, onUpdateDebugMode, onUpdateSoundOnSave, onAboutClick)
@@ -251,9 +251,9 @@ private fun ExpandedSettings(
                 .width(200.dp)
                 .fillMaxHeight()
                 .padding(
-                    start = insets.calculateLeftPadding(layoutDir) + Spacing.s24,
-                    top = Spacing.s24,
-                    bottom = insets.calculateBottomPadding() + Spacing.s24,
+                    start = insets.calculateLeftPadding(layoutDir) + Spacing.xl,
+                    top = Spacing.xl,
+                    bottom = insets.calculateBottomPadding() + Spacing.xl,
                 ),
         ) {
             SettingsSection.entries.forEach { section ->
@@ -275,10 +275,10 @@ private fun ExpandedSettings(
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState())
                     .padding(
-                        start = Spacing.s24,
-                        end = insets.calculateRightPadding(layoutDir) + Spacing.s24,
-                        top = Spacing.s24,
-                        bottom = insets.calculateBottomPadding() + Spacing.s24,
+                        start = Spacing.xl,
+                        end = insets.calculateRightPadding(layoutDir) + Spacing.xl,
+                        top = Spacing.xl,
+                        bottom = insets.calculateBottomPadding() + Spacing.xl,
                     ),
             ) {
                 when (selectedSection) {
@@ -313,10 +313,10 @@ private fun SectionLabel(
     Box(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(Radius.s))
             .background(bgColor)
             .clickable(onClick = onClick)
-            .padding(vertical = Spacing.s16, horizontal = Spacing.s12),
+            .padding(vertical = Spacing.m, horizontal = Spacing.s),
     ) {
         Text(label, style = HCType.label, color = textColor)
     }
@@ -346,7 +346,7 @@ private fun DetectionContent(
             )
         },
     )
-    Spacer(Modifier.height(Spacing.s8))
+    Spacer(Modifier.height(Spacing.xs))
     Text(
         when (selectedIndex) {
             0 -> stringResource(R.string.settings_sensitivity_careful_desc)
@@ -376,7 +376,7 @@ private fun CameraContent(
             if (enabled && is720p) showWarning = true
         },
     )
-    Spacer(Modifier.height(Spacing.s4))
+    Spacer(Modifier.height(Spacing.xxs))
     Text(
         "Digitally pans and zooms to follow players",
         style = HCType.micro,
@@ -384,7 +384,7 @@ private fun CameraContent(
     )
 
     if (showWarning && is720p) {
-        Spacer(Modifier.height(Spacing.s8))
+        Spacer(Modifier.height(Spacing.xs))
         Text(
             "For best results, switch to 1080p in Video settings.",
             style = HCType.micro,
@@ -394,11 +394,11 @@ private fun CameraContent(
 
     AnimatedVisibility(
         visible = autoFollowConfig.enabled,
-        enter = fadeIn(),
-        exit = fadeOut(),
+        enter = fadeIn(tween(250)),
+        exit = fadeOut(tween(200)),
     ) {
         Column {
-            Spacer(Modifier.height(Spacing.s16))
+            Spacer(Modifier.height(Spacing.m))
             FollowSpeedSlider(
                 alpha = autoFollowConfig.smoothingAlpha,
                 onValueChange = onUpdateAlpha,
@@ -458,7 +458,7 @@ private fun ClipTimingContent(
         steps = 4,
         onValueChange = onUpdateSecondsBefore,
     )
-    Spacer(Modifier.height(Spacing.s12))
+    Spacer(Modifier.height(Spacing.s))
     ClipSlider(
         label = stringResource(R.string.settings_seconds_after),
         value = config.secondsAfterEvent,
@@ -496,23 +496,23 @@ private fun AppContent(
         checked = debugMode,
         onCheckedChange = onUpdateDebugMode,
     )
-    Spacer(Modifier.height(Spacing.s12))
+    Spacer(Modifier.height(Spacing.s))
     SettingSwitch(
         label = stringResource(R.string.settings_sound_on_save),
         checked = soundOnSave,
         onCheckedChange = onUpdateSoundOnSave,
     )
-    Spacer(Modifier.height(Spacing.s40))
+    Spacer(Modifier.height(Spacing.xxxl))
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onAboutClick)
-            .padding(vertical = Spacing.s12),
+            .padding(vertical = Spacing.s),
         Arrangement.SpaceBetween,
         Alignment.CenterVertically,
     ) {
         Text(stringResource(R.string.settings_about), style = HCType.body, color = HC.white60)
-        Text("v${BuildConfig.VERSION_NAME}", style = HCType.micro, color = HC.white.copy(alpha = 0.4f))
+        Text("v${BuildConfig.VERSION_NAME}", style = HCType.micro, color = HC.white40)
     }
 }
 
@@ -527,9 +527,9 @@ private fun SegmentedControl(
             Modifier
                 .fillMaxWidth()
                 .height(44.dp)
-                .clip(RoundedCornerShape(Radii.r12))
+                .clip(RoundedCornerShape(Radius.m))
                 .background(HC.surfaceRaised)
-                .padding(Spacing.s4),
+                .padding(Spacing.xxs),
     ) {
         val segmentWidth = maxWidth / options.size
         val offsetX by animateDpAsState(
@@ -543,7 +543,7 @@ private fun SegmentedControl(
                 .offset(x = offsetX)
                 .width(segmentWidth)
                 .fillMaxHeight()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(Radius.s))
                 .background(HC.white10),
         )
 
@@ -559,7 +559,7 @@ private fun SegmentedControl(
                     Text(
                         label,
                         style = if (index == selectedIndex) HCType.title else HCType.label,
-                        color = if (index == selectedIndex) HC.white else HC.white.copy(alpha = 0.4f),
+                        color = if (index == selectedIndex) HC.white else HC.white40,
                     )
                 }
             }
