@@ -62,8 +62,11 @@ data class GoalZone(
 
 data class GoalZoneSet(
     val goalA: GoalZone,
-    val goalB: GoalZone,
+    val goalB: GoalZone? = null,
 ) {
+    val hasGoalB: Boolean get() = goalB != null
+    val activeZones: List<GoalZone> get() = listOfNotNull(goalA, goalB)
+
     companion object {
         val DEFAULT = GoalZoneSet(GoalZone.GOAL_A_DEFAULT, GoalZone.GOAL_B_DEFAULT)
     }

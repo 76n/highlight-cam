@@ -59,26 +59,27 @@ class UserPreferencesRepository
                 val a3y = prefs[Keys.GOAL_A_P3_Y] ?: return@map null
                 val a4x = prefs[Keys.GOAL_A_P4_X] ?: return@map null
                 val a4y = prefs[Keys.GOAL_A_P4_Y] ?: return@map null
-                val b1x = prefs[Keys.GOAL_B_P1_X] ?: return@map null
-                val b1y = prefs[Keys.GOAL_B_P1_Y] ?: return@map null
-                val b2x = prefs[Keys.GOAL_B_P2_X] ?: return@map null
-                val b2y = prefs[Keys.GOAL_B_P2_Y] ?: return@map null
-                val b3x = prefs[Keys.GOAL_B_P3_X] ?: return@map null
-                val b3y = prefs[Keys.GOAL_B_P3_Y] ?: return@map null
-                val b4x = prefs[Keys.GOAL_B_P4_X] ?: return@map null
-                val b4y = prefs[Keys.GOAL_B_P4_Y] ?: return@map null
 
-                GoalZoneSet(
-                    goalA =
-                        GoalZone(
-                            id = "a",
-                            label = "Goal A",
-                            p1 = NormalizedPoint(a1x, a1y),
-                            p2 = NormalizedPoint(a2x, a2y),
-                            p3 = NormalizedPoint(a3x, a3y),
-                            p4 = NormalizedPoint(a4x, a4y),
-                        ),
-                    goalB =
+                val goalA =
+                    GoalZone(
+                        id = "a",
+                        label = "Goal A",
+                        p1 = NormalizedPoint(a1x, a1y),
+                        p2 = NormalizedPoint(a2x, a2y),
+                        p3 = NormalizedPoint(a3x, a3y),
+                        p4 = NormalizedPoint(a4x, a4y),
+                    )
+
+                val goalB =
+                    run {
+                        val b1x = prefs[Keys.GOAL_B_P1_X] ?: return@run null
+                        val b1y = prefs[Keys.GOAL_B_P1_Y] ?: return@run null
+                        val b2x = prefs[Keys.GOAL_B_P2_X] ?: return@run null
+                        val b2y = prefs[Keys.GOAL_B_P2_Y] ?: return@run null
+                        val b3x = prefs[Keys.GOAL_B_P3_X] ?: return@run null
+                        val b3y = prefs[Keys.GOAL_B_P3_Y] ?: return@run null
+                        val b4x = prefs[Keys.GOAL_B_P4_X] ?: return@run null
+                        val b4y = prefs[Keys.GOAL_B_P4_Y] ?: return@run null
                         GoalZone(
                             id = "b",
                             label = "Goal B",
@@ -86,8 +87,10 @@ class UserPreferencesRepository
                             p2 = NormalizedPoint(b2x, b2y),
                             p3 = NormalizedPoint(b3x, b3y),
                             p4 = NormalizedPoint(b4x, b4y),
-                        ),
-                )
+                        )
+                    }
+
+                GoalZoneSet(goalA = goalA, goalB = goalB)
             }
 
         val recordingConfig: Flow<RecordingConfig> =
@@ -119,14 +122,25 @@ class UserPreferencesRepository
                 prefs[Keys.GOAL_A_P4_X] = a.p4.x
                 prefs[Keys.GOAL_A_P4_Y] = a.p4.y
                 val b = zoneSet.goalB
-                prefs[Keys.GOAL_B_P1_X] = b.p1.x
-                prefs[Keys.GOAL_B_P1_Y] = b.p1.y
-                prefs[Keys.GOAL_B_P2_X] = b.p2.x
-                prefs[Keys.GOAL_B_P2_Y] = b.p2.y
-                prefs[Keys.GOAL_B_P3_X] = b.p3.x
-                prefs[Keys.GOAL_B_P3_Y] = b.p3.y
-                prefs[Keys.GOAL_B_P4_X] = b.p4.x
-                prefs[Keys.GOAL_B_P4_Y] = b.p4.y
+                if (b != null) {
+                    prefs[Keys.GOAL_B_P1_X] = b.p1.x
+                    prefs[Keys.GOAL_B_P1_Y] = b.p1.y
+                    prefs[Keys.GOAL_B_P2_X] = b.p2.x
+                    prefs[Keys.GOAL_B_P2_Y] = b.p2.y
+                    prefs[Keys.GOAL_B_P3_X] = b.p3.x
+                    prefs[Keys.GOAL_B_P3_Y] = b.p3.y
+                    prefs[Keys.GOAL_B_P4_X] = b.p4.x
+                    prefs[Keys.GOAL_B_P4_Y] = b.p4.y
+                } else {
+                    prefs.remove(Keys.GOAL_B_P1_X)
+                    prefs.remove(Keys.GOAL_B_P1_Y)
+                    prefs.remove(Keys.GOAL_B_P2_X)
+                    prefs.remove(Keys.GOAL_B_P2_Y)
+                    prefs.remove(Keys.GOAL_B_P3_X)
+                    prefs.remove(Keys.GOAL_B_P3_Y)
+                    prefs.remove(Keys.GOAL_B_P4_X)
+                    prefs.remove(Keys.GOAL_B_P4_Y)
+                }
             }
         }
 

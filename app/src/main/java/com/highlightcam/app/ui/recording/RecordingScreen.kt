@@ -272,12 +272,12 @@ private fun RecordingContent(
         CameraPreview(cameraPreviewManager)
 
         if (isRecording && goalZoneSet != null) {
+            val zoneColors = mapOf("a" to HC.green, "b" to HC.blue)
             PolygonOverlay(
                 zones =
-                    listOf(
-                        ZoneDisplay(goalZoneSet.goalA, HC.green, zoneState("a")),
-                        ZoneDisplay(goalZoneSet.goalB, HC.blue, zoneState("b")),
-                    ),
+                    goalZoneSet.activeZones.map { zone ->
+                        ZoneDisplay(zone, zoneColors[zone.id] ?: HC.green, zoneState(zone.id))
+                    },
             )
         }
 

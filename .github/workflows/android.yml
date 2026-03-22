@@ -27,15 +27,6 @@ jobs:
       - name: Run Tests
         run: ./gradlew test
 
-      - name: Assemble Debug
-        run: ./gradlew assembleDebug
-
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v6
-        with:
-          name: debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v6

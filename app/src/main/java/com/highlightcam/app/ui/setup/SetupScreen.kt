@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -130,6 +131,8 @@ fun SetupScreen(
             onAdvanceToConfirm = viewModel::advanceToConfirm,
             onConfirm = viewModel::confirmZones,
             onRedraw = viewModel::redraw,
+            onAddGoalB = viewModel::onAddGoalB,
+            onSkipGoalB = viewModel::onSkipGoalB,
         )
     } else {
         PermissionDenied(onRequest = { cameraPermission.launchPermissionRequest() })
@@ -147,6 +150,8 @@ private fun SetupContent(
     onAdvanceToConfirm: () -> Unit,
     onConfirm: () -> Unit,
     onRedraw: () -> Unit,
+    onAddGoalB: () -> Unit,
+    onSkipGoalB: () -> Unit,
 ) {
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -188,19 +193,26 @@ private fun SetupContent(
                 val instruction =
                     when (uiState.step) {
                         SetupStep.PLACING_A -> "Tap the 4 corners of Goal A"
+                        SetupStep.DECIDING_SECOND_GOAL -> "Is the second goal visible in frame?"
                         SetupStep.PLACING_B -> "Now tap the 4 corners of Goal B"
                         SetupStep.FINE_TUNING -> "Drag to adjust"
                         SetupStep.CONFIRMING -> ""
                     }
                 FloatingChip { Text(instruction, style = HCType.label, color = HC.white) }
                 Spacer(Modifier.height(Spacing.s8))
-                val currentPoints =
-                    when (uiState.step) {
-                        SetupStep.PLACING_A -> uiState.goalAPoints.size
-                        SetupStep.PLACING_B -> uiState.goalBPoints.size
-                        else -> GoalZone.VERTEX_COUNT
-                    }
-                StepDots(filled = currentPoints)
+                SetupStepDots(uiState)
+            }
+        }
+
+        AnimatedVisibility(
+            visible = uiState.decidingSecondGoal,
+            enter = fadeIn() + slideInVertically { it / 3 },
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s12)) {
+                PrimaryButton("Add Goal B", onClick = onAddGoalB, fixedWidth = 160.dp)
+                GhostButton("One goal only", onClick = onSkipGoalB, fixedWidth = 160.dp)
             }
         }
 
@@ -231,6 +243,7 @@ private fun SetupContent(
             ConfirmSheet(
                 goalAPoints = uiState.goalAPoints,
                 goalBPoints = uiState.goalBPoints,
+                goalBEnabled = uiState.goalBEnabled,
                 onConfirm = onConfirm,
                 onRedraw = onRedraw,
             )
@@ -239,16 +252,40 @@ private fun SetupContent(
 }
 
 @Composable
-private fun StepDots(filled: Int) {
+private fun SetupStepDots(uiState: SetupUiState) {
+    val steps = SetupStep.entries.filter { it != SetupStep.CONFIRMING }
+    val currentIndex = steps.indexOf(uiState.step)
+    val goalBSkipped = !uiState.goalBEnabled && uiState.step.ordinal > SetupStep.DECIDING_SECOND_GOAL.ordinal
+
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        repeat(GoalZone.VERTEX_COUNT) { i ->
+        steps.forEachIndexed { i, step ->
             val color =
                 when {
-                    i < filled -> HC.green
-                    i == filled -> HC.white
+                    step == SetupStep.PLACING_B && goalBSkipped -> HC.white20
+                    i < currentIndex -> HC.green
+                    i == currentIndex -> HC.white
                     else -> HC.white20
                 }
-            Box(Modifier.size(5.dp).clip(CircleShape).background(color))
+            val isFilled = i <= currentIndex || (step == SetupStep.PLACING_B && goalBSkipped)
+            if (isFilled) {
+                Box(Modifier.size(5.dp).clip(CircleShape).background(color))
+            } else {
+                Box(
+                    Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(Color.Transparent)
+                        .then(
+                            Modifier.drawBehind {
+                                drawCircle(
+                                    color = HC.white20,
+                                    radius = size.minDimension / 2f,
+                                    style = Stroke(width = 1.dp.toPx()),
+                                )
+                            },
+                        ),
+                )
+            }
         }
     }
 }
@@ -286,6 +323,7 @@ private fun ZoneOverlay(
                         onDragEnd = { dragTarget = null },
                     )
                 }
+            SetupStep.DECIDING_SECOND_GOAL -> Modifier
         }
 
     val pulse = rememberInfiniteTransition(label = "pulse")
@@ -343,7 +381,9 @@ private fun ZoneOverlay(
         }
 
         drawPolygon(state.goalAPoints, HC.green, state.step == SetupStep.PLACING_A)
-        drawPolygon(state.goalBPoints, HC.blue, state.step == SetupStep.PLACING_B)
+        if (state.goalBEnabled && state.goalBPoints.isNotEmpty()) {
+            drawPolygon(state.goalBPoints, HC.blue, state.step == SetupStep.PLACING_B)
+        }
     }
 }
 
@@ -372,7 +412,7 @@ private fun findClosestHandle(
     }
 
     check("a", state.goalAPoints)
-    check("b", state.goalBPoints)
+    if (state.goalBEnabled) check("b", state.goalBPoints)
     return best
 }
 
@@ -380,6 +420,7 @@ private fun findClosestHandle(
 private fun ConfirmSheet(
     goalAPoints: List<NormalizedPoint>,
     goalBPoints: List<NormalizedPoint>,
+    goalBEnabled: Boolean,
     onConfirm: () -> Unit,
     onRedraw: () -> Unit,
 ) {
@@ -397,12 +438,22 @@ private fun ConfirmSheet(
                 .background(HC.white20),
         )
         Spacer(Modifier.height(Spacing.s24))
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
-        ) {
-            ZonePreviewCanvas(goalAPoints, HC.green, "Goal A", Modifier.weight(1f))
-            ZonePreviewCanvas(goalBPoints, HC.blue, "Goal B", Modifier.weight(1f))
+        if (goalBEnabled) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
+            ) {
+                ZonePreviewCanvas(goalAPoints, HC.green, "Goal A", Modifier.weight(1f))
+                ZonePreviewCanvas(goalBPoints, HC.blue, "Goal B", Modifier.weight(1f))
+            }
+        } else {
+            ZonePreviewCanvas(goalAPoints, HC.green, "Goal A", Modifier.fillMaxWidth())
+            Spacer(Modifier.height(Spacing.s8))
+            Text(
+                "Single goal mode \u2014 Goal B not configured",
+                style = HCType.micro,
+                color = HC.white60,
+            )
         }
         Spacer(Modifier.height(Spacing.s24))
         PrimaryButton("Let's go", onClick = onConfirm)

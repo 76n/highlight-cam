@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
@@ -31,6 +33,7 @@ fun GhostButton(
     modifier: Modifier = Modifier,
     borderColor: Color = HC.white20,
     textColor: Color = HC.white,
+    fixedWidth: Dp? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -43,7 +46,7 @@ fun GhostButton(
     Box(
         modifier =
             modifier
-                .fillMaxWidth()
+                .then(if (fixedWidth != null) Modifier.width(fixedWidth) else Modifier.fillMaxWidth())
                 .height(48.dp)
                 .graphicsLayer {
                     scaleX = scale

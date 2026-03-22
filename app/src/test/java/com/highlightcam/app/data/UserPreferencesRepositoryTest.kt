@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -50,7 +51,7 @@ class UserPreferencesRepositoryTest {
         }
 
     @Test
-    fun `goalZoneSet round-trip`() =
+    fun `goalZoneSet round-trip with two goals`() =
         testScope.runTest {
             val zoneSet =
                 GoalZoneSet(
@@ -77,7 +78,51 @@ class UserPreferencesRepositoryTest {
             val saved = repo.goalZoneSet.first()!!
             assertEquals(0.1f, saved.goalA.p1.x, 0.001f)
             assertEquals(0.2f, saved.goalA.p1.y, 0.001f)
-            assertEquals(0.9f, saved.goalB.p2.x, 0.001f)
+            assertEquals(0.9f, saved.goalB!!.p2.x, 0.001f)
+        }
+
+    @Test
+    fun `goalZoneSet round-trip with single goal`() =
+        testScope.runTest {
+            val zoneSet =
+                GoalZoneSet(
+                    goalA =
+                        GoalZone(
+                            "a",
+                            "Goal A",
+                            NormalizedPoint(0.1f, 0.2f),
+                            NormalizedPoint(0.3f, 0.2f),
+                            NormalizedPoint(0.3f, 0.6f),
+                            NormalizedPoint(0.1f, 0.6f),
+                        ),
+                )
+            repo.updateGoalZoneSet(zoneSet)
+            val saved = repo.goalZoneSet.first()!!
+            assertEquals(0.1f, saved.goalA.p1.x, 0.001f)
+            assertNull(saved.goalB)
+        }
+
+    @Test
+    fun `goalZoneSet clears goalB when updated from two to one goal`() =
+        testScope.runTest {
+            repo.updateGoalZoneSet(GoalZoneSet.DEFAULT)
+            assertNotNull(repo.goalZoneSet.first()!!.goalB)
+
+            val singleGoal =
+                GoalZoneSet(
+                    goalA =
+                        GoalZone(
+                            "a",
+                            "Goal A",
+                            NormalizedPoint(0.1f, 0.2f),
+                            NormalizedPoint(0.3f, 0.2f),
+                            NormalizedPoint(0.3f, 0.6f),
+                            NormalizedPoint(0.1f, 0.6f),
+                        ),
+                )
+            repo.updateGoalZoneSet(singleGoal)
+            val saved = repo.goalZoneSet.first()!!
+            assertNull(saved.goalB)
         }
 
     @Test
@@ -108,7 +153,7 @@ class UserPreferencesRepositoryTest {
             repo.updateGoalZoneSet(updated)
             val saved = repo.goalZoneSet.first()!!
             assertEquals(0.0f, saved.goalA.p1.x, 0.001f)
-            assertEquals(1.0f, saved.goalB.p3.x, 0.001f)
+            assertEquals(1.0f, saved.goalB!!.p3.x, 0.001f)
         }
 
     @Test

@@ -156,4 +156,41 @@ class GoalEventAnalyzerTest {
         assertEquals(0.50f, GoalEventAnalyzer.lerp(0.65f, 0.35f, 0.5f), 0.001f)
         assertEquals(0.35f, GoalEventAnalyzer.lerp(0.65f, 0.35f, 1.0f), 0.001f)
     }
+
+    @Test
+    fun `single zone set detects ball in Goal A`() {
+        val singleZoneSet = GoalZoneSet(goalA)
+        val detections =
+            listOf(
+                Detection(GoalEventAnalyzer.CLASS_SPORTS_BALL, 0.85f, BoundingBox(0.15f, 0.25f, 0.25f, 0.35f)),
+            )
+        val result = analyzer.analyze(detections, singleZoneSet, defaultSensitivity)
+        assertTrue(result.isCandidateEvent)
+        assertTrue(result.ballInZone)
+        assertEquals("a", result.goalZoneId)
+    }
+
+    @Test
+    fun `single zone set does not crash on absent Goal B`() {
+        val singleZoneSet = GoalZoneSet(goalA)
+        val detections =
+            listOf(
+                Detection(GoalEventAnalyzer.CLASS_SPORTS_BALL, 0.90f, BoundingBox(0.75f, 0.25f, 0.85f, 0.35f)),
+            )
+        val result = analyzer.analyze(detections, singleZoneSet, defaultSensitivity)
+        assertFalse(result.isCandidateEvent)
+        assertNull(result.goalZoneId)
+    }
+
+    @Test
+    fun `activeZones returns one when goalB is null`() {
+        val singleZoneSet = GoalZoneSet(goalA)
+        assertEquals(1, singleZoneSet.activeZones.size)
+        assertEquals("a", singleZoneSet.activeZones[0].id)
+    }
+
+    @Test
+    fun `activeZones returns two when goalB is defined`() {
+        assertEquals(2, zoneSet.activeZones.size)
+    }
 }

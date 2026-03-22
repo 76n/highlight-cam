@@ -20,6 +20,7 @@ import javax.inject.Inject
 
 enum class SetupStep {
     PLACING_A,
+    DECIDING_SECOND_GOAL,
     PLACING_B,
     FINE_TUNING,
     CONFIRMING,
@@ -29,9 +30,12 @@ data class SetupUiState(
     val step: SetupStep = SetupStep.PLACING_A,
     val goalAPoints: List<NormalizedPoint> = emptyList(),
     val goalBPoints: List<NormalizedPoint> = emptyList(),
+    val goalBEnabled: Boolean = true,
     val isReconfiguring: Boolean = false,
     val cameraError: String? = null,
-)
+) {
+    val decidingSecondGoal: Boolean get() = step == SetupStep.DECIDING_SECOND_GOAL
+}
 
 sealed class SetupNavEvent {
     data object NavigateToRecording : SetupNavEvent()
@@ -67,7 +71,7 @@ class SetupViewModel
                     SetupStep.PLACING_A -> {
                         val pts = state.goalAPoints + point
                         if (pts.size >= GoalZone.VERTEX_COUNT) {
-                            state.copy(goalAPoints = pts, step = SetupStep.PLACING_B)
+                            state.copy(goalAPoints = pts, step = SetupStep.DECIDING_SECOND_GOAL)
                         } else {
                             state.copy(goalAPoints = pts)
                         }
@@ -81,6 +85,26 @@ class SetupViewModel
                         }
                     }
                     else -> state
+                }
+            }
+        }
+
+        fun onAddGoalB() {
+            _uiState.update { state ->
+                if (state.step == SetupStep.DECIDING_SECOND_GOAL) {
+                    state.copy(step = SetupStep.PLACING_B, goalBEnabled = true)
+                } else {
+                    state
+                }
+            }
+        }
+
+        fun onSkipGoalB() {
+            _uiState.update { state ->
+                if (state.step == SetupStep.DECIDING_SECOND_GOAL) {
+                    state.copy(step = SetupStep.FINE_TUNING, goalBEnabled = false, goalBPoints = emptyList())
+                } else {
+                    state
                 }
             }
         }
@@ -150,14 +174,19 @@ class SetupViewModel
                 aPoints: List<NormalizedPoint>,
                 bPoints: List<NormalizedPoint>,
             ): GoalZoneSet {
-                fun pts(list: List<NormalizedPoint>) = if (list.size >= GoalZone.VERTEX_COUNT) list else GoalZone.GOAL_A_DEFAULT.toPoints()
+                val a =
+                    if (aPoints.size >= GoalZone.VERTEX_COUNT) aPoints else GoalZone.GOAL_A_DEFAULT.toPoints()
 
-                val a = pts(aPoints)
-                val b = if (bPoints.size >= GoalZone.VERTEX_COUNT) bPoints else GoalZone.GOAL_B_DEFAULT.toPoints()
+                val goalB =
+                    if (bPoints.size >= GoalZone.VERTEX_COUNT) {
+                        GoalZone("b", "Goal B", bPoints[0], bPoints[1], bPoints[2], bPoints[3])
+                    } else {
+                        null
+                    }
 
                 return GoalZoneSet(
                     goalA = GoalZone("a", "Goal A", a[0], a[1], a[2], a[3]),
-                    goalB = GoalZone("b", "Goal B", b[0], b[1], b[2], b[3]),
+                    goalB = goalB,
                 )
             }
         }

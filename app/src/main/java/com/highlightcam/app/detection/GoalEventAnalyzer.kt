@@ -14,25 +14,18 @@ class GoalEventAnalyzer
             goalZoneSet: GoalZoneSet,
             sensitivity: Float,
         ): AnalysisResult {
-            val resultA = analyzeForZone(detections, goalZoneSet.goalA, sensitivity)
-            val resultB = analyzeForZone(detections, goalZoneSet.goalB, sensitivity)
+            val results = goalZoneSet.activeZones.map { analyzeForZone(detections, it, sensitivity) }
+            val best = results.filter { it.isCandidateEvent }.maxByOrNull { it.confidence }
 
-            return when {
-                resultA.isCandidateEvent && resultB.isCandidateEvent ->
-                    if (resultA.confidence >= resultB.confidence) resultA else resultB
-                resultA.isCandidateEvent -> resultA
-                resultB.isCandidateEvent -> resultB
-                else ->
-                    AnalysisResult(
-                        isCandidateEvent = false,
-                        confidence = 0f,
-                        ballDetected = resultA.ballDetected || resultB.ballDetected,
-                        ballInZone = false,
-                        playerCountInZone = resultA.playerCountInZone + resultB.playerCountInZone,
-                        reason = "No event",
-                        goalZoneId = null,
-                    )
-            }
+            return best ?: AnalysisResult(
+                isCandidateEvent = false,
+                confidence = 0f,
+                ballDetected = results.any { it.ballDetected },
+                ballInZone = false,
+                playerCountInZone = results.sumOf { it.playerCountInZone },
+                reason = "No event",
+                goalZoneId = null,
+            )
         }
 
         private fun analyzeForZone(

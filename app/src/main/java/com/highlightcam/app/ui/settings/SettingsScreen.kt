@@ -388,8 +388,10 @@ private fun GoalZonesContent(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TinyZoneCanvas(goalZoneSet?.goalA, HC.green)
-        Spacer(Modifier.width(Spacing.s8))
-        TinyZoneCanvas(goalZoneSet?.goalB, HC.blue)
+        if (goalZoneSet?.hasGoalB == true) {
+            Spacer(Modifier.width(Spacing.s8))
+            TinyZoneCanvas(goalZoneSet.goalB, HC.blue)
+        }
         Spacer(Modifier.weight(1f))
         Text("Reconfigure", style = HCType.label, color = HC.green)
         Spacer(Modifier.width(Spacing.s4))
