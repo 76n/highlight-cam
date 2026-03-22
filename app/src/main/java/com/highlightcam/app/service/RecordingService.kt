@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.net.Uri
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -25,10 +24,6 @@ import com.highlightcam.app.domain.VideoQuality
 import com.highlightcam.app.recording.CircularBufferRecorder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -98,9 +93,7 @@ class RecordingService : LifecycleService() {
                             is DetectionEvent.ClipSaveTriggered -> {
                                 try {
                                     val config = userPreferencesRepository.recordingConfig.first()
-                                    val result = circularBufferRecorder.saveClip(config.totalBufferSeconds, config.secondsAfterEvent)
-                                    _clipResultFlow.tryEmit(result)
-                                    result.onFailure { e -> Timber.e(e, "Auto-save clip failed") }
+                                    circularBufferRecorder.requestSave(config.totalBufferSeconds, config.secondsAfterEvent)
                                 } catch (e: Exception) {
                                     Timber.e(e, "Error during auto-save")
                                 }
@@ -139,14 +132,7 @@ class RecordingService : LifecycleService() {
     private fun handleSaveClip(intent: Intent) {
         val secondsBefore = intent.getIntExtra(EXTRA_SECONDS_BEFORE, RecordingConfig().totalBufferSeconds)
         val secondsAfter = intent.getIntExtra(EXTRA_SECONDS_AFTER, RecordingConfig().secondsAfterEvent)
-        lifecycleScope.launch {
-            val result = circularBufferRecorder.saveClip(secondsBefore, secondsAfter)
-            _clipResultFlow.tryEmit(result)
-            result.onFailure { e ->
-                Timber.e(e, "Failed to save clip")
-                sessionRepository.updateRecorderState(RecorderState.Error(e.message ?: "Clip save failed"))
-            }
-        }
+        circularBufferRecorder.requestSave(secondsBefore, secondsAfter)
     }
 
     private fun acquireWakeLock() {
@@ -202,7 +188,5 @@ class RecordingService : LifecycleService() {
         const val EXTRA_SECONDS_AFTER = "extra_seconds_after"
         private const val CHANNEL_ID = "hc_recording_channel"
         private const val NOTIFICATION_ID = 1001
-        private val _clipResultFlow = MutableSharedFlow<Result<Uri>>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-        val clipResultFlow: SharedFlow<Result<Uri>> = _clipResultFlow.asSharedFlow()
     }
 }

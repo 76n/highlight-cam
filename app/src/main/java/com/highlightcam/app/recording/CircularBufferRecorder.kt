@@ -20,12 +20,18 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 import java.io.File
 import java.util.ArrayDeque
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,12 +51,14 @@ class CircularBufferRecorder
         private val clipAssembler: ClipAssembler,
         private val sessionRepository: SessionRepository,
     ) {
-        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        private val recordingScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        private val savingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private var segmentJob: Job? = null
         private var activeRecording: androidx.camera.video.Recording? = null
         private val segments = ArrayDeque<SegmentFile>()
-        private val segmentLock = Any()
-        private val protectedPaths = mutableSetOf<String>()
+        private val segmentMutex = Mutex()
+        private val protectedFiles: MutableSet<File> =
+            Collections.synchronizedSet(mutableSetOf())
 
         @Volatile
         private var config: RecordingConfig = RecordingConfig()
@@ -59,6 +67,10 @@ class CircularBufferRecorder
         private var recordingStartedAtMs = 0L
 
         private val isSaving = AtomicBoolean(false)
+
+        private val _saveErrorFlow =
+            MutableSharedFlow<String>(extraBufferCapacity = 1)
+        val saveErrorFlow: SharedFlow<String> = _saveErrorFlow.asSharedFlow()
 
         val state: StateFlow<RecorderState> = sessionRepository.recorderState
 
@@ -82,7 +94,7 @@ class CircularBufferRecorder
             sessionRepository.updateRecorderState(RecorderState.Recording(recordingStartedAtMs))
 
             segmentJob =
-                scope.launch {
+                recordingScope.launch {
                     segmentLoop(recorder)
                 }
         }
@@ -93,7 +105,7 @@ class CircularBufferRecorder
             activeRecording?.stop()
             activeRecording = null
 
-            synchronized(segmentLock) {
+            segmentMutex.withLock {
                 segments.forEach { it.file.delete() }
                 segments.clear()
             }
@@ -101,52 +113,67 @@ class CircularBufferRecorder
             sessionRepository.updateRecorderState(RecorderState.Idle)
         }
 
+        fun requestSave(
+            secondsBefore: Int,
+            secondsAfter: Int,
+        ) {
+            if (!isSaving.compareAndSet(false, true)) {
+                Timber.w("Save already in progress, ignoring")
+                return
+            }
+
+            savingScope.launch {
+                try {
+                    val result = executeSave(secondsBefore, secondsAfter)
+                    result.onSuccess { sessionRepository.incrementClipsSaved() }
+                    result.onFailure { e ->
+                        Timber.e(e, "Clip save failed")
+                        _saveErrorFlow.tryEmit(e.message ?: "Save failed")
+                    }
+                } catch (e: Throwable) {
+                    Timber.e(e, "Unexpected error in save coroutine")
+                    _saveErrorFlow.tryEmit(e.message ?: "Save failed")
+                } finally {
+                    isSaving.set(false)
+                    if (recordingStartedAtMs > 0L) {
+                        sessionRepository.updateRecorderState(
+                            RecorderState.Recording(recordingStartedAtMs),
+                        )
+                    }
+                }
+            }
+        }
+
         @Suppress("ReturnCount")
-        suspend fun saveClip(
+        private suspend fun executeSave(
             secondsBefore: Int,
             secondsAfter: Int,
         ): Result<Uri> {
-            if (!isSaving.compareAndSet(false, true)) {
-                Timber.w("Save already in progress, ignoring")
-                return Result.failure(IllegalStateException("Save already in progress"))
+            sessionRepository.updateRecorderState(RecorderState.SavingClip(0f))
+
+            val triggerTimeMs = System.currentTimeMillis()
+
+            if (secondsAfter > 0) {
+                delay(secondsAfter * 1000L)
             }
 
+            val clipStartTimeMs = triggerTimeMs - secondsBefore * 1000L
+            val clipEndTimeMs = triggerTimeMs + secondsAfter * 1000L
+
+            val allSegments = waitForSegments(clipStartTimeMs, clipEndTimeMs)
+
+            if (allSegments.isEmpty()) {
+                Timber.w(
+                    "No segments available after waiting [%d before, %d after]",
+                    secondsBefore,
+                    secondsAfter,
+                )
+                return Result.failure(IllegalStateException("No segments after waiting"))
+            }
+
+            allSegments.forEach { protectedFiles.add(it.file) }
+
             try {
-                sessionRepository.updateRecorderState(RecorderState.SavingClip(0f))
-
-                val triggerTimeMs = System.currentTimeMillis()
-
-                if (secondsAfter > 0) {
-                    delay(secondsAfter * 1000L)
-                }
-
-                val clipStartTimeMs = triggerTimeMs - secondsBefore * 1000L
-                val clipEndTimeMs = triggerTimeMs + secondsAfter * 1000L
-
-                val allSegments =
-                    synchronized(segmentLock) {
-                        val selected =
-                            segments
-                                .filter { seg ->
-                                    seg.startTimeMs + seg.durationMs > clipStartTimeMs &&
-                                        seg.startTimeMs < clipEndTimeMs &&
-                                        seg.file.exists() &&
-                                        seg.file.length() > 0
-                                }
-                                .toList()
-                        selected.forEach { protectedPaths.add(it.file.absolutePath) }
-                        selected
-                    }
-
-                if (allSegments.isEmpty()) {
-                    Timber.w(
-                        "No segments available for clip [%d before, %d after]",
-                        secondsBefore,
-                        secondsAfter,
-                    )
-                    return Result.failure(IllegalStateException("No segments available"))
-                }
-
                 val actualPreMs = triggerTimeMs - allSegments.first().startTimeMs
                 if (actualPreMs < secondsBefore * 1000L) {
                     Timber.w(
@@ -162,76 +189,87 @@ class CircularBufferRecorder
                     (secondsBefore.toLong() + secondsAfter.toLong()) * 1_000_000L
                 val segmentDurationsUs = allSegments.map { it.durationMs * 1000L }
 
-                val result =
-                    clipAssembler.assemble(
-                        segmentFiles = allSegments.map { it.file },
-                        segmentDurationsUs = segmentDurationsUs,
-                        trimLeadingUs = trimLeadingUs,
-                        maxDurationUs = desiredDurationUs,
-                    )
-
-                result.onSuccess {
-                    sessionRepository.incrementClipsSaved()
-                }
-
-                return result
-            } catch (e: Throwable) {
-                Timber.e(e, "Error saving clip")
-                return Result.failure(e)
-            } finally {
-                synchronized(segmentLock) { protectedPaths.clear() }
-                isSaving.set(false)
-                sessionRepository.updateRecorderState(
-                    RecorderState.Recording(recordingStartedAtMs),
+                return clipAssembler.assemble(
+                    segmentFiles = allSegments.map { it.file },
+                    segmentDurationsUs = segmentDurationsUs,
+                    trimLeadingUs = trimLeadingUs,
+                    maxDurationUs = desiredDurationUs,
                 )
+            } finally {
+                allSegments.forEach { protectedFiles.remove(it.file) }
             }
+        }
+
+        private suspend fun waitForSegments(
+            clipStartTimeMs: Long,
+            clipEndTimeMs: Long,
+        ): List<SegmentFile> {
+            repeat(MAX_SEGMENT_WAIT_ATTEMPTS) {
+                val snapshot =
+                    segmentMutex.withLock {
+                        segments
+                            .filter { seg ->
+                                seg.startTimeMs + seg.durationMs > clipStartTimeMs &&
+                                    seg.startTimeMs < clipEndTimeMs &&
+                                    seg.file.exists() &&
+                                    seg.file.length() > 0
+                            }
+                            .toList()
+                    }
+                if (snapshot.isNotEmpty()) return snapshot
+                delay(SEGMENT_WAIT_INTERVAL_MS)
+            }
+            return emptyList()
         }
 
         @SuppressLint("MissingPermission")
         private suspend fun segmentLoop(recorder: Recorder) {
-            while (scope.isActive) {
-                val segmentFile = File(segmentsDir, "seg_${System.currentTimeMillis()}.mp4")
-                val startTimeMs = System.currentTimeMillis()
-                val finalizeDeferred = CompletableDeferred<Unit>()
-
-                val recording =
-                    recorder
-                        .prepareRecording(
-                            context,
-                            FileOutputOptions.Builder(segmentFile).build(),
-                        )
-                        .withAudioEnabled()
-                        .start(ContextCompat.getMainExecutor(context)) { event ->
-                            if (event is VideoRecordEvent.Finalize) {
-                                if (event.hasError()) {
-                                    Timber.w(
-                                        "Segment finalize error: %d",
-                                        event.error,
-                                    )
-                                }
-                                finalizeDeferred.complete(Unit)
-                            }
-                        }
-
-                activeRecording = recording
-                delay(config.segmentDurationSeconds * 1000L)
-                recording.stop()
-                finalizeDeferred.await()
-
-                val durationMs = System.currentTimeMillis() - startTimeMs
-
-                if (segmentFile.exists() && segmentFile.length() > 0) {
-                    addSegment(SegmentFile(segmentFile, startTimeMs, durationMs))
-                } else {
-                    segmentFile.delete()
+            while (recordingScope.isActive) {
+                try {
+                    recordOneSegment(recorder)
+                } catch (e: Throwable) {
+                    Timber.e(e, "Segment recording failed, retrying")
+                    delay(SEGMENT_RETRY_DELAY_MS)
                 }
             }
         }
 
-        private fun addSegment(segment: SegmentFile) {
-            synchronized(segmentLock) {
-                segments.addLast(segment)
-                trimBuffer()
+        @SuppressLint("MissingPermission")
+        private suspend fun recordOneSegment(recorder: Recorder) {
+            val segmentFile = File(segmentsDir, "seg_${System.currentTimeMillis()}.mp4")
+            val startTimeMs = System.currentTimeMillis()
+            val finalizeDeferred = CompletableDeferred<Unit>()
+
+            val recording =
+                recorder
+                    .prepareRecording(
+                        context,
+                        FileOutputOptions.Builder(segmentFile).build(),
+                    )
+                    .withAudioEnabled()
+                    .start(ContextCompat.getMainExecutor(context)) { event ->
+                        if (event is VideoRecordEvent.Finalize) {
+                            if (event.hasError()) {
+                                Timber.w("Segment finalize error: %d", event.error)
+                            }
+                            finalizeDeferred.complete(Unit)
+                        }
+                    }
+
+            activeRecording = recording
+            delay(config.segmentDurationSeconds * 1000L)
+            recording.stop()
+            finalizeDeferred.await()
+
+            val durationMs = System.currentTimeMillis() - startTimeMs
+
+            if (segmentFile.exists() && segmentFile.length() > 0) {
+                segmentMutex.withLock {
+                    segments.addLast(SegmentFile(segmentFile, startTimeMs, durationMs))
+                    trimBuffer()
+                }
+            } else {
+                segmentFile.delete()
             }
         }
 
@@ -240,9 +278,15 @@ class CircularBufferRecorder
                 if (isSaving.get()) config.bufferSegments * 2 else config.bufferSegments
             while (segments.size > maxSize) {
                 val oldest = segments.first()
-                if (oldest.file.absolutePath in protectedPaths) break
+                if (protectedFiles.contains(oldest.file)) break
                 segments.removeFirst()
                 oldest.file.delete()
             }
+        }
+
+        companion object {
+            private const val SEGMENT_RETRY_DELAY_MS = 500L
+            private const val SEGMENT_WAIT_INTERVAL_MS = 200L
+            private const val MAX_SEGMENT_WAIT_ATTEMPTS = 50
         }
     }

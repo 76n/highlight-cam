@@ -23,7 +23,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -41,7 +40,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -355,33 +353,19 @@ private fun RecordingContent(
                     .padding(bottom = Spacing.s32),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s24),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 RecordButton(
                     isRecording = isRecording,
                     onClick = { if (isRecording) onStopRecording() else onStartRecording() },
                     onLongClick = if (debugMode) onShowDebugPanel else null,
                 )
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isRecording,
-                    enter = fadeIn(tween(250)) + slideInHorizontally(tween(250)) { it },
-                    modifier = Modifier.align(Alignment.CenterEnd).offset(x = Spacing.s24 + 56.dp),
-                ) {
-                    Box(
-                        Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(HC.white10)
-                            .clickable(onClick = onManualSave),
-                        Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Filled.SportsScore,
-                            contentDescription = null,
-                            tint = HC.white,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    }
-                }
+                CaptureButton(
+                    enabled = isRecording,
+                    onClick = onManualSave,
+                )
             }
             Spacer(Modifier.height(Spacing.s12))
             SavedCount(count = clipsSaved)
@@ -480,7 +464,7 @@ private fun RecordButton(
         label = "rec_s",
     )
     val bgColor by animateColorAsState(
-        if (isRecording) HC.red else Color.Transparent,
+        if (isRecording) HC.red else HC.white10,
         tween(400),
         label = "rec_bg",
     )
@@ -492,7 +476,7 @@ private fun RecordButton(
 
     Box(
         Modifier
-            .size(72.dp)
+            .size(56.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -513,12 +497,44 @@ private fun RecordButton(
         Crossfade(targetState = isRecording, animationSpec = tween(200), label = "rec_icon") { recording ->
             Box(Modifier.fillMaxSize(), Alignment.Center) {
                 if (recording) {
-                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).background(HC.white))
+                    Box(Modifier.size(20.dp).clip(RoundedCornerShape(5.dp)).background(HC.white))
                 } else {
-                    Box(Modifier.size(24.dp).clip(CircleShape).background(HC.white))
+                    Box(Modifier.size(20.dp).clip(CircleShape).background(HC.white))
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CaptureButton(
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val bgColor by animateColorAsState(
+        if (enabled) HC.white20 else HC.white10,
+        tween(200),
+        label = "cap_bg",
+    )
+    val iconTint by animateColorAsState(
+        if (enabled) HC.white else HC.white.copy(alpha = 0.4f),
+        tween(200),
+        label = "cap_tint",
+    )
+    Box(
+        Modifier
+            .size(56.dp)
+            .clip(CircleShape)
+            .background(bgColor)
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+        Alignment.Center,
+    ) {
+        Icon(
+            Icons.Filled.SportsScore,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 
