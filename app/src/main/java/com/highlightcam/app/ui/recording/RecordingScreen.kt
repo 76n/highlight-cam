@@ -96,6 +96,7 @@ import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import com.highlightcam.app.BuildConfig
 import com.highlightcam.app.R
 import com.highlightcam.app.camera.CameraPreviewManager
 import com.highlightcam.app.detection.DebugInfo
@@ -105,7 +106,6 @@ import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.tracking.CropWindow
 import com.highlightcam.app.ui.components.FloatingChip
 import com.highlightcam.app.ui.components.HCIconButton
-import com.highlightcam.app.ui.components.LocalActivityLifecycleOwner
 import com.highlightcam.app.ui.components.OverlayState
 import com.highlightcam.app.ui.components.PolygonOverlay
 import com.highlightcam.app.ui.components.PrimaryButton
@@ -214,7 +214,9 @@ fun RecordingScreen(
 
     if (showVisionDialog) VisionOffDialog(onDismiss = { showVisionDialog = false })
     if (showLowStorageDialog) LowStorageDialog(onDismiss = { showLowStorageDialog = false })
-    if (showDebugPanel && debugMode) DebugPanel(debugInfo = debugInfo, onDismiss = { showDebugPanel = false })
+    if (showDebugPanel && debugMode) {
+        DebugPanel(debugInfo = debugInfo, cameraPreviewManager = cameraPreviewManager, onDismiss = { showDebugPanel = false })
+    }
 }
 
 @Suppress("LongParameterList", "LongMethod")
@@ -382,13 +384,23 @@ private fun RecordingContent(
             Spacer(Modifier.height(Spacing.s))
             SavedCount(count = clipsSaved)
         }
+
+        Text(
+            "v${BuildConfig.VERSION_NAME}",
+            style = HCType.micro,
+            color = HC.white20,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(start = 12.dp, bottom = 12.dp),
+        )
     }
 }
 
 @Composable
 private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
     val ctx = LocalContext.current
-    val activityLifecycleOwner = LocalActivityLifecycleOwner.current
     val previewView =
         remember {
             PreviewView(ctx).apply {
@@ -396,10 +408,6 @@ private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
                 scaleType = PreviewView.ScaleType.FILL_CENTER
             }
         }
-
-    LaunchedEffect(Unit) {
-        cameraPreviewManager.bindOnce(activityLifecycleOwner)
-    }
 
     DisposableEffect(Unit) {
         cameraPreviewManager.attachSurface(previewView.surfaceProvider)
@@ -603,8 +611,12 @@ private fun LowStorageDialog(onDismiss: () -> Unit) {
 @Composable
 private fun DebugPanel(
     debugInfo: DebugInfo,
+    cameraPreviewManager: CameraPreviewManager,
     onDismiss: () -> Unit,
 ) {
+    val frameAge = System.currentTimeMillis() - cameraPreviewManager.lastFrameTimeMs
+    val framesRecent = if (frameAge < 5000L) "yes" else "stale (${frameAge / 1000}s ago)"
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -615,6 +627,15 @@ private fun DebugPanel(
         Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.l).padding(bottom = Spacing.xxl)) {
             Text(stringResource(R.string.debug_title), style = HCType.title, color = HC.white, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(Spacing.m))
+
+            Text("Camera", style = HCType.label, color = HC.green)
+            Spacer(Modifier.height(Spacing.xxs))
+            DebugLabel("Camera bound", cameraPreviewManager.isCameraBound.toString())
+            DebugLabel("Frames recent", framesRecent)
+            DebugLabel("Camera error", cameraPreviewManager.error.value ?: "none")
+            DebugLabel("CPM instance", "%x".format(cameraPreviewManager.instanceHash))
+            Spacer(Modifier.height(Spacing.s))
+
             DebugRmsBar(debugInfo.currentRms, debugInfo.baselineRms)
             Spacer(Modifier.height(Spacing.xs))
             DebugLabel("Baseline RMS", "%.4f".format(debugInfo.baselineRms))

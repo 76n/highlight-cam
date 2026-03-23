@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!--
+        All GradleDependency + OldTargetApi: the lint-suggested versions of AGP,
+        compose-bom, camerax, lifecycle, activity-compose, navigation-compose,
+        core-ktx, hilt-navigation-compose, datastore, and media3 are compiled
+        with Kotlin 2.0+ metadata. Our project is on Kotlin 1.9.24 — updating
+        requires a full Kotlin 2.0 migration (compose compiler plugin, toolchain).
+        targetSdk 36 also requires compileSdk 36 with those newer libraries.
+        Tracked as a separate toolchain migration task.
+    -->
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="OldTargetApi" severity="ignore" />
+
+    <!--
+        Compose runtime lint jar references Kotlin analysis APIs from a newer
+        Kotlin version. Fixed by updating compose-bom, which requires Kotlin 2.0+.
+    -->
+    <issue id="ObsoleteLintCustomCheck" severity="ignore" />
+</lint>

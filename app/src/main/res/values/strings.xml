@@ -13,8 +13,6 @@
     <string name="permission_grant">Grant Permissions</string>
 
     <!-- Library -->
-    <string name="library_empty_body">Start recording a game to capture automatic highlights</string>
-    <string name="library_share">Share</string>
     <string name="library_delete">Delete</string>
     <string name="library_delete_title">Delete clip?</string>
     <string name="library_delete_body">This will permanently remove this clip.</string>

@@ -158,7 +158,7 @@ class RecordingService : LifecycleService() {
 
     private fun acquireWakeLock() {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "HighlightCam::Recording").apply { acquire() }
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "HighlightCam::Recording").apply { acquire(WAKELOCK_TIMEOUT_MS) }
     }
 
     @Suppress("MagicNumber")
@@ -229,5 +229,6 @@ class RecordingService : LifecycleService() {
         const val EXTRA_SECONDS_AFTER = "extra_seconds_after"
         private const val CHANNEL_ID = "hc_recording_channel"
         private const val NOTIFICATION_ID = 1001
+        private const val WAKELOCK_TIMEOUT_MS = 4L * 60 * 60 * 1000
     }
 }

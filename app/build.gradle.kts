@@ -6,16 +6,20 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
+val majorVersion = 1
+val minorVersion = 0
+val patchVersion = 1
+
 android {
     namespace = "com.highlightcam.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.highlightcam.app"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        targetSdk = 35
+        versionCode = majorVersion * 10000 + minorVersion * 100 + patchVersion
+        versionName = "$majorVersion.$minorVersion.$patchVersion"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -67,6 +71,7 @@ android {
     lint {
         warningsAsErrors = false
         abortOnError = true
+        lintConfig = file("lint.xml")
     }
 }
 

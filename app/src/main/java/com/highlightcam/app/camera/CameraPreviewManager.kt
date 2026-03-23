@@ -14,14 +14,21 @@ import androidx.camera.video.VideoCapture
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,7 +52,10 @@ class CameraPreviewManager
             )
         val frameFlow: SharedFlow<Bitmap> = _frameFlow.asSharedFlow()
 
+        private val bindMutex = Mutex()
         private var isBound = false
+
+        val isCameraBound: Boolean get() = isBound
 
         private val preview = Preview.Builder().build()
 
@@ -65,38 +75,51 @@ class CameraPreviewManager
         val videoCapture: VideoCapture<Recorder> = VideoCapture.withOutput(recorder)
 
         @Volatile
-        private var lastFrameTimeMs = 0L
+        var lastFrameTimeMs = 0L
+            private set
+
+        private val watchdogScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val instanceHash: Int = System.identityHashCode(this)
+
+        init {
+            Timber.d("CameraPreviewManager instance created: %x", instanceHash)
+        }
 
         suspend fun bindOnce(owner: LifecycleOwner) {
             if (isBound) return
-            try {
-                val provider = getProvider()
-                provider.unbindAll()
-                val camera =
-                    provider.bindToLifecycle(
-                        owner,
-                        CameraSelector.DEFAULT_BACK_CAMERA,
-                        preview,
-                        imageAnalysis,
-                        videoCapture,
-                    )
-                camera.cameraControl.setZoomRatio(1.0f)
+            bindMutex.withLock {
+                if (isBound) return
+                try {
+                    val provider = getProvider()
+                    provider.unbindAll()
+                    val camera =
+                        provider.bindToLifecycle(
+                            owner,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
+                            preview,
+                            imageAnalysis,
+                            videoCapture,
+                        )
+                    camera.cameraControl.setZoomRatio(1.0f)
 
-                imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(context)) { proxy ->
-                    val now = System.currentTimeMillis()
-                    if (now - lastFrameTimeMs >= FRAME_THROTTLE_MS) {
-                        lastFrameTimeMs = now
-                        _frameFlow.tryEmit(proxy.toBitmap())
+                    imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(context)) { proxy ->
+                        val now = System.currentTimeMillis()
+                        if (now - lastFrameTimeMs >= FRAME_THROTTLE_MS) {
+                            lastFrameTimeMs = now
+                            _frameFlow.tryEmit(proxy.toBitmap())
+                        }
+                        proxy.close()
                     }
-                    proxy.close()
-                }
 
-                isBound = true
-                _error.value = null
-                Timber.d("Camera bound to Activity lifecycle")
-            } catch (e: Exception) {
-                Timber.e(e, "Camera bind failed")
-                _error.value = e.message ?: "Camera bind failed"
+                    isBound = true
+                    _error.value = null
+                    Timber.d("Camera bound to Activity lifecycle")
+
+                    startWatchdog()
+                } catch (e: Exception) {
+                    Timber.e(e, "Camera bind failed")
+                    _error.value = e.message ?: "Camera bind failed"
+                }
             }
         }
 
@@ -106,6 +129,23 @@ class CameraPreviewManager
 
         fun detachSurface() {
             preview.setSurfaceProvider(null)
+        }
+
+        private fun startWatchdog() {
+            watchdogScope.launch {
+                while (true) {
+                    delay(WATCHDOG_INTERVAL_MS)
+                    if (isBound) {
+                        val elapsed = System.currentTimeMillis() - lastFrameTimeMs
+                        if (elapsed > WATCHDOG_STALE_THRESHOLD_MS) {
+                            Timber.e(
+                                "CAMERA WATCHDOG: no frames for %dms, surface may be detached",
+                                elapsed,
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         private suspend fun getProvider(): ProcessCameraProvider =
@@ -125,5 +165,7 @@ class CameraPreviewManager
 
         companion object {
             private const val FRAME_THROTTLE_MS = 300L
+            private const val WATCHDOG_INTERVAL_MS = 2000L
+            private const val WATCHDOG_STALE_THRESHOLD_MS = 5000L
         }
     }
