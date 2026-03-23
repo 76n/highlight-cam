@@ -353,7 +353,7 @@ private fun DetectionContent(
             1 -> stringResource(R.string.settings_sensitivity_balanced_desc)
             else -> stringResource(R.string.settings_sensitivity_aggressive_desc)
         },
-        style = HCType.body,
+        style = HCType.settingCaption,
         color = HC.white60,
     )
 }
@@ -379,7 +379,7 @@ private fun CameraContent(
     Spacer(Modifier.height(Spacing.xxs))
     Text(
         "Digitally pans and zooms to follow players",
-        style = HCType.micro,
+        style = HCType.settingCaption,
         color = HC.white60,
     )
 

@@ -5,6 +5,7 @@ package com.highlightcam.app.ui.library
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -15,6 +16,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +25,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -38,25 +42,33 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Forward5
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Replay5
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -88,10 +100,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.navigation.NavController
 import com.highlightcam.app.R
-import com.highlightcam.app.ui.components.GhostButton
 import com.highlightcam.app.ui.components.HCIconButton
 import com.highlightcam.app.ui.theme.HC
 import com.highlightcam.app.ui.theme.HCType
+import com.highlightcam.app.ui.theme.IconSize
 import com.highlightcam.app.ui.theme.Radius
 import com.highlightcam.app.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
@@ -109,9 +121,16 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isMultiSelectMode by viewModel.isMultiSelectMode.collectAsState()
+    val selectedClips by viewModel.selectedClips.collectAsState()
     var playerClip by remember { mutableStateOf<LibraryClip?>(null) }
-    var selectedClip by remember { mutableStateOf<LibraryClip?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<LibraryClip?>(null) }
+    val context = LocalContext.current
+
+    BackHandler(enabled = isMultiSelectMode) {
+        viewModel.clearSelection()
+    }
 
     if (playerClip != null) {
         FullScreenPlayer(clip = playerClip!!, onBack = { playerClip = null })
@@ -126,83 +145,136 @@ fun LibraryScreen(
             .fillMaxSize()
             .background(HC.bg),
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding =
-                PaddingValues(
-                    top = insets.calculateTopPadding() + Spacing.xl,
-                    bottom = insets.calculateBottomPadding() + Spacing.l,
-                    start = insets.calculateLeftPadding(layoutDir) + Spacing.l,
-                    end = insets.calculateRightPadding(layoutDir) + Spacing.l,
-                ),
-        ) {
-            item(key = "header") {
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = Spacing.xl),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    HCIconButton(Icons.AutoMirrored.Filled.ArrowBack, onClick = { navController.popBackStack() })
-                    Spacer(Modifier.width(Spacing.m))
-                    Text("Highlights", style = HCType.heading, color = HC.white)
-                }
-            }
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val columns = if (maxWidth > 600.dp) 4 else 3
 
-            when (val state = uiState) {
-                is LibraryUiState.Loading ->
-                    item(key = "loading") { LoadingState() }
-                is LibraryUiState.Empty ->
-                    item(key = "empty") { EmptyState() }
-                is LibraryUiState.Error ->
-                    item(key = "error") { ErrorState(state.message) }
-                is LibraryUiState.Loaded -> {
-                    val rows = state.clips.chunked(2)
-                    items(rows.size, key = { rows[it].first().id }) { rowIndex ->
-                        val row = rows[rowIndex]
-                        Row(
-                            Modifier.fillMaxWidth().padding(bottom = 3.dp),
-                            horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        ) {
-                            row.forEach { clip ->
-                                ClipCell(
-                                    clip = clip,
-                                    modifier =
-                                        Modifier
-                                            .weight(1f)
-                                            .combinedClickable(
-                                                onClick = { playerClip = clip },
-                                                onLongClick = { selectedClip = clip },
-                                            ),
-                                )
-                            }
-                            if (row.size == 1) Spacer(Modifier.weight(1f))
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding =
+                    PaddingValues(
+                        top = insets.calculateTopPadding() + Spacing.xl,
+                        bottom = insets.calculateBottomPadding() + Spacing.l,
+                        start = insets.calculateLeftPadding(layoutDir) + Spacing.l,
+                        end = insets.calculateRightPadding(layoutDir) + Spacing.l,
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = Spacing.xl),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        HCIconButton(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            onClick = { navController.popBackStack() },
+                        )
+                        Spacer(Modifier.width(Spacing.m))
+                        Text("Highlights", style = HCType.heading, color = HC.white)
+                    }
+                }
+
+                when (val state = uiState) {
+                    is LibraryUiState.Loading ->
+                        item(span = { GridItemSpan(maxLineSpan) }) { LoadingState() }
+                    is LibraryUiState.Empty ->
+                        item(span = { GridItemSpan(maxLineSpan) }) { EmptyState() }
+                    is LibraryUiState.Error ->
+                        item(span = { GridItemSpan(maxLineSpan) }) { ErrorState(state.message) }
+                    is LibraryUiState.Loaded -> {
+                        items(state.clips, key = { it.id }) { clip ->
+                            ClipCell(
+                                clip = clip,
+                                isMultiSelectMode = isMultiSelectMode,
+                                isSelected = selectedClips.contains(clip.uri),
+                                onTap = {
+                                    if (isMultiSelectMode) {
+                                        viewModel.toggleSelection(clip)
+                                    } else {
+                                        playerClip = clip
+                                    }
+                                },
+                                onLongPress = {
+                                    viewModel.toggleSelection(clip)
+                                },
+                                onShare = { shareClip(context, clip) },
+                                onDelete = {
+                                    deleteTarget = clip
+                                    showDeleteConfirm = true
+                                },
+                            )
                         }
                     }
                 }
             }
         }
+
+        AnimatedVisibility(
+            visible = isMultiSelectMode,
+            enter = slideInVertically { -it } + fadeIn(),
+            exit = slideOutVertically { -it } + fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            SelectionBar(
+                selectedCount = selectedClips.size,
+                onDelete = { showDeleteConfirm = true },
+                onShare = {
+                    val loadedState = uiState as? LibraryUiState.Loaded ?: return@SelectionBar
+                    val clips = loadedState.clips.filter { selectedClips.contains(it.uri) }
+                    shareClips(context, clips)
+                    viewModel.clearSelection()
+                },
+                onClear = { viewModel.clearSelection() },
+            )
+        }
     }
 
-    if (selectedClip != null) {
-        ClipDetailSheet(
-            clip = selectedClip!!,
-            onDismiss = { selectedClip = null },
-            onShare = {
-                shareClip(navController.context, it)
-                selectedClip = null
-            },
-            onDelete = { showDeleteConfirm = true },
-        )
-    }
-
-    if (showDeleteConfirm && selectedClip != null) {
+    if (showDeleteConfirm) {
         DeleteConfirmDialog(
             onConfirm = {
-                viewModel.deleteClip(selectedClip!!)
+                if (isMultiSelectMode) {
+                    viewModel.deleteSelected()
+                } else {
+                    deleteTarget?.let { viewModel.deleteClip(it) }
+                }
                 showDeleteConfirm = false
-                selectedClip = null
+                deleteTarget = null
             },
-            onDismiss = { showDeleteConfirm = false },
+            onDismiss = {
+                showDeleteConfirm = false
+                deleteTarget = null
+            },
         )
+    }
+}
+
+@Composable
+private fun SelectionBar(
+    selectedCount: Int,
+    onDelete: () -> Unit,
+    onShare: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val insets = WindowInsets.safeDrawing.asPaddingValues()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(HC.surface)
+            .padding(top = insets.calculateTopPadding())
+            .padding(horizontal = Spacing.l, vertical = Spacing.s),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HCIconButton(Icons.AutoMirrored.Filled.ArrowBack, onClick = onClear)
+        Spacer(Modifier.width(Spacing.m))
+        Text("$selectedCount selected", style = HCType.title, color = HC.white)
+        Spacer(Modifier.weight(1f))
+        IconButton(onClick = onShare) {
+            Icon(Icons.Filled.Share, contentDescription = "Share", tint = HC.white)
+        }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = HC.red)
+        }
     }
 }
 
@@ -239,16 +311,32 @@ private fun EmptyState() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ClipCell(
     clip: LibraryClip,
+    isMultiSelectMode: Boolean,
+    isSelected: Boolean,
+    onTap: () -> Unit,
+    onLongPress: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     var thumbnail by remember(clip.id) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(clip.uri) { thumbnail = withContext(Dispatchers.IO) { loadThumbnail(context, clip.uri) } }
+    var showMenu by remember { mutableStateOf(false) }
+    LaunchedEffect(clip.uri) {
+        thumbnail = withContext(Dispatchers.IO) { loadThumbnail(context, clip.uri) }
+    }
 
-    Column(modifier = modifier) {
+    Column(
+        modifier =
+            modifier.combinedClickable(
+                onClick = onTap,
+                onLongClick = onLongPress,
+            ),
+    ) {
         Box(
             Modifier
                 .fillMaxWidth()
@@ -265,20 +353,93 @@ private fun ClipCell(
             } else {
                 ShimmerBox(Modifier.fillMaxSize())
             }
+
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(Spacing.xs)
+                    .padding(Spacing.xxs)
                     .clip(RoundedCornerShape(Radius.pill))
                     .background(Color.Black.copy(alpha = 0.75f))
                     .padding(horizontal = Spacing.xs, vertical = Spacing.xxs),
             ) {
                 Text(formatDuration(clip.durationMs), style = HCType.micro, color = HC.white)
             }
+
+            if (isMultiSelectMode) {
+                Icon(
+                    if (isSelected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                    contentDescription = null,
+                    tint = if (isSelected) HC.green else HC.white60,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(Spacing.xxs)
+                            .size(IconSize.l),
+                )
+            } else {
+                Box(modifier = Modifier.align(Alignment.TopEnd).padding(Spacing.xxs)) {
+                    Box(
+                        Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(Radius.pill))
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .clickable { showMenu = true },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Filled.MoreVert,
+                            contentDescription = "More",
+                            tint = HC.white,
+                            modifier = Modifier.size(IconSize.m),
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(IconSize.s))
+                                    Text("Share")
+                                }
+                            },
+                            onClick = {
+                                showMenu = false
+                                onShare()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = null,
+                                        tint = HC.red,
+                                        modifier = Modifier.size(IconSize.s),
+                                    )
+                                    Text("Delete", color = HC.red)
+                                }
+                            },
+                            onClick = {
+                                showMenu = false
+                                onDelete()
+                            },
+                        )
+                    }
+                }
+            }
         }
-        Spacer(Modifier.height(Spacing.xs))
+        Spacer(Modifier.height(Spacing.xxs))
         Text(
-            formatDate(clip.dateAdded),
+            formatDateTime(clip.dateAdded),
             style = HCType.micro,
             color = HC.white60,
             maxLines = 1,
@@ -307,47 +468,6 @@ private fun ShimmerBox(modifier: Modifier = Modifier) {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ClipDetailSheet(
-    clip: LibraryClip,
-    onDismiss: () -> Unit,
-    onShare: (LibraryClip) -> Unit,
-    onDelete: (LibraryClip) -> Unit,
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(),
-        containerColor = HC.surface,
-        windowInsets = WindowInsets.safeDrawing,
-    ) {
-        Column(Modifier.padding(horizontal = Spacing.l).padding(bottom = Spacing.xxl)) {
-            Text(clip.displayName, style = HCType.title, color = HC.white)
-            Spacer(Modifier.height(Spacing.xxs))
-            Text(
-                "${formatDate(clip.dateAdded)}  ·  ${formatFileSize(clip.sizeBytes)}",
-                style = HCType.micro,
-                color = HC.white60,
-            )
-            Spacer(Modifier.height(Spacing.xxl))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                GhostButton(
-                    stringResource(R.string.library_share),
-                    onClick = { onShare(clip) },
-                    modifier = Modifier.weight(1f),
-                )
-                GhostButton(
-                    stringResource(R.string.library_delete),
-                    onClick = { onDelete(clip) },
-                    modifier = Modifier.weight(1f),
-                    borderColor = HC.red.copy(alpha = 0.4f),
-                    textColor = HC.red,
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun DeleteConfirmDialog(
     onConfirm: () -> Unit,
@@ -357,7 +477,9 @@ private fun DeleteConfirmDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.library_delete_title)) },
         text = { Text(stringResource(R.string.library_delete_body)) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.library_delete), color = HC.red) } },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.library_delete), color = HC.red) }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
@@ -456,7 +578,10 @@ private fun FullScreenPlayer(
                     modifier =
                         Modifier
                             .size(36.dp)
-                            .padding(start = if (forward) Spacing.massive else 0.dp, end = if (!forward) Spacing.massive else 0.dp),
+                            .padding(
+                                start = if (forward) Spacing.massive else 0.dp,
+                                end = if (!forward) Spacing.massive else 0.dp,
+                            ),
                 )
             }
         }
@@ -504,7 +629,10 @@ private fun FullScreenPlayer(
                         .windowInsetsPadding(WindowInsets.safeDrawing)
                         .padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.xxl),
                 ) {
-                    Row(Modifier.fillMaxWidth().padding(bottom = Spacing.xs), Arrangement.SpaceBetween) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = Spacing.xs),
+                        Arrangement.SpaceBetween,
+                    ) {
                         Text(formatDuration(currentPosition), style = HCType.micro, color = HC.white)
                         Text(formatDuration(duration), style = HCType.micro, color = HC.white40)
                     }
@@ -554,6 +682,24 @@ private fun shareClip(
     context.startActivity(Intent.createChooser(intent, "Share clip"))
 }
 
+private fun shareClips(
+    context: android.content.Context,
+    clips: List<LibraryClip>,
+) {
+    if (clips.size == 1) {
+        shareClip(context, clips.first())
+        return
+    }
+    val uris = ArrayList(clips.map { it.uri })
+    val intent =
+        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "video/mp4"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    context.startActivity(Intent.createChooser(intent, "Share clips"))
+}
+
 private fun formatDuration(ms: Long): String {
     val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60
@@ -561,8 +707,8 @@ private fun formatDuration(ms: Long): String {
     return "%d:%02d".format(minutes, seconds)
 }
 
-private fun formatDate(epochSeconds: Long): String {
-    val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+private fun formatDateTime(epochSeconds: Long): String {
+    val sdf = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
     return sdf.format(Date(epochSeconds * 1000))
 }
 

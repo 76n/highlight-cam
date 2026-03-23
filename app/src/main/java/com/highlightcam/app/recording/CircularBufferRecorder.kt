@@ -148,6 +148,7 @@ class CircularBufferRecorder
             sessionRepository.updateRecorderState(RecorderState.SavingClip(0f))
 
             val triggerTimeMs = System.currentTimeMillis()
+            val preTriggerSnapshot = segmentMutex.withLock { segments.toList() }
             val cropSnapshots = mutableListOf<Pair<Long, CropWindow>>()
 
             if (secondsAfter > 0) {
@@ -161,18 +162,29 @@ class CircularBufferRecorder
                 }
             }
 
-            val clipStartTimeMs = triggerTimeMs - secondsBefore * 1000L
-            val clipEndTimeMs = triggerTimeMs + secondsAfter * 1000L
+            val postTriggerSnapshot = segmentMutex.withLock { segments.toList() }
 
-            val allSegments = waitForSegments(clipStartTimeMs, clipEndTimeMs)
+            val clipStartMs = triggerTimeMs - secondsBefore * 1000L
+            val clipEndMs = triggerTimeMs + secondsAfter * 1000L
+
+            val allSegments =
+                (preTriggerSnapshot + postTriggerSnapshot)
+                    .distinctBy { it.file.name }
+                    .filter { seg ->
+                        seg.startTimeMs + seg.durationMs > clipStartMs &&
+                            seg.startTimeMs < clipEndMs &&
+                            seg.file.exists() &&
+                            seg.file.length() > 0
+                    }
+                    .sortedBy { it.startTimeMs }
 
             if (allSegments.isEmpty()) {
                 Timber.w(
-                    "No segments available after waiting [%d before, %d after]",
+                    "No segments in time window [%d before, %d after]",
                     secondsBefore,
                     secondsAfter,
                 )
-                return Result.failure(IllegalStateException("No segments after waiting"))
+                return Result.failure(IllegalStateException("No segments in time window"))
             }
 
             allSegments.forEach { protectedFiles.add(it.file) }
@@ -188,9 +200,8 @@ class CircularBufferRecorder
                 }
 
                 val trimLeadingUs =
-                    maxOf(0L, clipStartTimeMs - allSegments.first().startTimeMs) * 1000L
-                val desiredDurationUs =
-                    (secondsBefore.toLong() + secondsAfter.toLong()) * 1_000_000L
+                    maxOf(0L, clipStartMs - allSegments.first().startTimeMs) * 1000L
+                val desiredDurationUs = (clipEndMs - maxOf(clipStartMs, allSegments.first().startTimeMs)) * 1000L
                 val segmentDurationsUs = allSegments.map { it.durationMs * 1000L }
 
                 val hasNonTrivialCrop =
@@ -207,28 +218,6 @@ class CircularBufferRecorder
             } finally {
                 allSegments.forEach { protectedFiles.remove(it.file) }
             }
-        }
-
-        private suspend fun waitForSegments(
-            clipStartTimeMs: Long,
-            clipEndTimeMs: Long,
-        ): List<SegmentFile> {
-            repeat(MAX_SEGMENT_WAIT_ATTEMPTS) {
-                val snapshot =
-                    segmentMutex.withLock {
-                        segments
-                            .filter { seg ->
-                                seg.startTimeMs + seg.durationMs > clipStartTimeMs &&
-                                    seg.startTimeMs < clipEndTimeMs &&
-                                    seg.file.exists() &&
-                                    seg.file.length() > 0
-                            }
-                            .toList()
-                    }
-                if (snapshot.isNotEmpty()) return snapshot
-                delay(SEGMENT_WAIT_INTERVAL_MS)
-            }
-            return emptyList()
         }
 
         @SuppressLint("MissingPermission")
@@ -298,8 +287,6 @@ class CircularBufferRecorder
 
         companion object {
             private const val SEGMENT_RETRY_DELAY_MS = 500L
-            private const val SEGMENT_WAIT_INTERVAL_MS = 200L
-            private const val MAX_SEGMENT_WAIT_ATTEMPTS = 50
             private const val CROP_SNAPSHOT_INTERVAL_MS = 100L
         }
     }

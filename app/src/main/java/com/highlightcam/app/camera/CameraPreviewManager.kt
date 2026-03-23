@@ -3,7 +3,6 @@ package com.highlightcam.app.camera
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Size
-import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -35,8 +34,18 @@ class CameraPreviewManager
     constructor(
         @ApplicationContext private val context: Context,
     ) {
-        private var camera: Camera? = null
-        private var cameraProvider: ProcessCameraProvider? = null
+        private val _error = MutableStateFlow<String?>(null)
+        val error: StateFlow<String?> = _error.asStateFlow()
+
+        private val _frameFlow =
+            MutableSharedFlow<Bitmap>(
+                replay = 0,
+                extraBufferCapacity = 1,
+                onBufferOverflow = BufferOverflow.DROP_OLDEST,
+            )
+        val frameFlow: SharedFlow<Bitmap> = _frameFlow.asSharedFlow()
+
+        private var isBound = false
 
         private val preview = Preview.Builder().build()
 
@@ -55,62 +64,48 @@ class CameraPreviewManager
 
         val videoCapture: VideoCapture<Recorder> = VideoCapture.withOutput(recorder)
 
-        private val _frameFlow =
-            MutableSharedFlow<Bitmap>(
-                replay = 0,
-                extraBufferCapacity = 1,
-                onBufferOverflow = BufferOverflow.DROP_OLDEST,
-            )
-        val frameFlow: SharedFlow<Bitmap> = _frameFlow.asSharedFlow()
-
-        private val _cameraError = MutableStateFlow<String?>(null)
-        val cameraError: StateFlow<String?> = _cameraError.asStateFlow()
-
         @Volatile
         private var lastFrameTimeMs = 0L
 
-        suspend fun initialize(lifecycleOwner: LifecycleOwner) {
+        suspend fun bindOnce(owner: LifecycleOwner) {
+            if (isBound) return
             try {
                 val provider = getProvider()
-                cameraProvider = provider
                 provider.unbindAll()
-
-                setupImageAnalysis()
-
-                camera =
+                val camera =
                     provider.bindToLifecycle(
-                        lifecycleOwner,
+                        owner,
                         CameraSelector.DEFAULT_BACK_CAMERA,
                         preview,
                         imageAnalysis,
                         videoCapture,
                     )
-                camera?.cameraControl?.setZoomRatio(1.0f)
-                _cameraError.value = null
+                camera.cameraControl.setZoomRatio(1.0f)
+
+                imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(context)) { proxy ->
+                    val now = System.currentTimeMillis()
+                    if (now - lastFrameTimeMs >= FRAME_THROTTLE_MS) {
+                        lastFrameTimeMs = now
+                        _frameFlow.tryEmit(proxy.toBitmap())
+                    }
+                    proxy.close()
+                }
+
+                isBound = true
+                _error.value = null
                 Timber.d("Camera bound to Activity lifecycle")
             } catch (e: Exception) {
-                Timber.e(e, "Camera initialization failed")
-                _cameraError.value = e.message ?: "Camera initialization failed"
+                Timber.e(e, "Camera bind failed")
+                _error.value = e.message ?: "Camera bind failed"
             }
         }
 
-        fun attachPreviewSurface(surfaceProvider: Preview.SurfaceProvider) {
+        fun attachSurface(surfaceProvider: Preview.SurfaceProvider) {
             preview.setSurfaceProvider(surfaceProvider)
         }
 
-        fun detachPreviewSurface() {
+        fun detachSurface() {
             preview.setSurfaceProvider(null)
-        }
-
-        private fun setupImageAnalysis() {
-            imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(context)) { proxy ->
-                val now = System.currentTimeMillis()
-                if (now - lastFrameTimeMs >= FRAME_THROTTLE_MS) {
-                    lastFrameTimeMs = now
-                    _frameFlow.tryEmit(proxy.toBitmap())
-                }
-                proxy.close()
-            }
         }
 
         private suspend fun getProvider(): ProcessCameraProvider =

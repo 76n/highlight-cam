@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
         }
 
         lifecycleScope.launch {
-            cameraPreviewManager.initialize(this@MainActivity)
+            cameraPreviewManager.bindOnce(this@MainActivity)
         }
 
         setContent {

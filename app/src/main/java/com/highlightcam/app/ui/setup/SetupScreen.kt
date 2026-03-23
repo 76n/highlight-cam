@@ -38,7 +38,11 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -112,7 +116,7 @@ fun SetupScreen(
                 .cameraPreviewManager()
         }
 
-    val cameraError by cameraPreviewManager.cameraError.collectAsState()
+    val cameraError by cameraPreviewManager.error.collectAsState()
     LaunchedEffect(cameraError) { viewModel.updateCameraError(cameraError) }
 
     LaunchedEffect(Unit) {
@@ -169,9 +173,9 @@ private fun SetupContent(
         }
 
     DisposableEffect(Unit) {
-        cameraPreviewManager.attachPreviewSurface(previewView.surfaceProvider)
+        cameraPreviewManager.attachSurface(previewView.surfaceProvider)
         onDispose {
-            cameraPreviewManager.detachPreviewSurface()
+            cameraPreviewManager.detachSurface()
             viewSize = IntSize.Zero
         }
     }
@@ -234,8 +238,8 @@ private fun SetupContent(
             modifier = Modifier.align(Alignment.Center),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                PrimaryButton("Add Goal B", onClick = onAddGoalB, fixedWidth = 160.dp)
-                GhostButton("One goal only", onClick = onSkipGoalB, fixedWidth = 160.dp)
+                PrimaryButton("Add Goal B", onClick = onAddGoalB, fixedWidth = 160.dp, fixedHeight = 48.dp, icon = Icons.Filled.Add)
+                GhostButton("One goal only", onClick = onSkipGoalB, fixedWidth = 160.dp, fixedHeight = 48.dp, icon = Icons.Filled.Check)
             }
         }
 
@@ -249,7 +253,7 @@ private fun SetupContent(
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(start = Spacing.xl, end = Spacing.xl, bottom = Spacing.xxl),
         ) {
-            PrimaryButton("Continue", onClick = onAdvanceToConfirm)
+            PrimaryButton("Continue", onClick = onAdvanceToConfirm, icon = Icons.Filled.Check)
         }
     }
 
@@ -474,9 +478,9 @@ private fun ConfirmOverlay(
                 )
             }
             Spacer(Modifier.height(Spacing.xl))
-            PrimaryButton("Let's go", onClick = onConfirm)
+            PrimaryButton("Let's go", onClick = onConfirm, icon = Icons.Filled.Videocam)
             Spacer(Modifier.height(Spacing.s))
-            GhostButton("Redo", onClick = onRedraw)
+            GhostButton("Redo", onClick = onRedraw, icon = Icons.Filled.Replay)
         }
     }
 }
@@ -545,7 +549,7 @@ private fun PermissionDenied(onRequest: () -> Unit) {
                 modifier = Modifier.widthIn(max = 260.dp),
             )
             Spacer(Modifier.height(Spacing.xxl))
-            PrimaryButton("Allow Camera", onClick = onRequest, fixedWidth = 200.dp)
+            PrimaryButton("Allow Camera", onClick = onRequest, fixedWidth = 200.dp, icon = Icons.Filled.CameraAlt)
         }
     }
 }

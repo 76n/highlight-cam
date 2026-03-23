@@ -47,6 +47,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.GridView
@@ -104,6 +105,7 @@ import com.highlightcam.app.navigation.Routes
 import com.highlightcam.app.tracking.CropWindow
 import com.highlightcam.app.ui.components.FloatingChip
 import com.highlightcam.app.ui.components.HCIconButton
+import com.highlightcam.app.ui.components.LocalActivityLifecycleOwner
 import com.highlightcam.app.ui.components.OverlayState
 import com.highlightcam.app.ui.components.PolygonOverlay
 import com.highlightcam.app.ui.components.PrimaryButton
@@ -386,16 +388,22 @@ private fun RecordingContent(
 @Composable
 private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
     val ctx = LocalContext.current
+    val activityLifecycleOwner = LocalActivityLifecycleOwner.current
     val previewView =
         remember {
             PreviewView(ctx).apply {
                 implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                scaleType = PreviewView.ScaleType.FILL_CENTER
             }
         }
 
+    LaunchedEffect(Unit) {
+        cameraPreviewManager.bindOnce(activityLifecycleOwner)
+    }
+
     DisposableEffect(Unit) {
-        cameraPreviewManager.attachPreviewSurface(previewView.surfaceProvider)
-        onDispose { cameraPreviewManager.detachPreviewSurface() }
+        cameraPreviewManager.attachSurface(previewView.surfaceProvider)
+        onDispose { cameraPreviewManager.detachSurface() }
     }
 
     AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
@@ -730,7 +738,12 @@ private fun PermissionRequestScreen(onRequestPermissions: () -> Unit) {
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(Spacing.xxl))
-            PrimaryButton(stringResource(R.string.permission_grant), onClick = onRequestPermissions, fixedWidth = 200.dp)
+            PrimaryButton(
+                stringResource(R.string.permission_grant),
+                onClick = onRequestPermissions,
+                fixedWidth = 200.dp,
+                icon = Icons.Filled.CameraAlt,
+            )
         }
     }
 }

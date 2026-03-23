@@ -69,6 +69,14 @@ object HCType {
             fontSize = 11.sp,
             letterSpacing = 0.5.sp,
         )
+
+    val settingCaption =
+        TextStyle(
+            fontFamily = InterFontFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = 13.sp,
+            letterSpacing = 0.2.sp,
+        )
 }
 
 val Typography =

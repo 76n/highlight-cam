@@ -52,6 +52,12 @@ class LibraryViewModel
         private val _sortOrder = MutableStateFlow(SortOrder.NEWEST)
         val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
 
+        private val _selectedClips = MutableStateFlow<Set<Uri>>(emptySet())
+        val selectedClips: StateFlow<Set<Uri>> = _selectedClips.asStateFlow()
+
+        private val _isMultiSelectMode = MutableStateFlow(false)
+        val isMultiSelectMode: StateFlow<Boolean> = _isMultiSelectMode.asStateFlow()
+
         private var allClips: List<LibraryClip> = emptyList()
 
         init {
@@ -86,6 +92,29 @@ class LibraryViewModel
                 withContext(Dispatchers.IO) {
                     appContext.contentResolver.delete(clip.uri, null, null)
                 }
+                loadClips()
+            }
+        }
+
+        fun toggleSelection(clip: LibraryClip) {
+            val current = _selectedClips.value.toMutableSet()
+            if (current.contains(clip.uri)) current.remove(clip.uri) else current.add(clip.uri)
+            _selectedClips.value = current
+            _isMultiSelectMode.value = current.isNotEmpty()
+        }
+
+        fun clearSelection() {
+            _selectedClips.value = emptySet()
+            _isMultiSelectMode.value = false
+        }
+
+        fun deleteSelected() {
+            viewModelScope.launch {
+                val toDelete = _selectedClips.value
+                withContext(Dispatchers.IO) {
+                    toDelete.forEach { appContext.contentResolver.delete(it, null, null) }
+                }
+                clearSelection()
                 loadClips()
             }
         }
