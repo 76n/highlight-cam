@@ -124,10 +124,12 @@ class CameraPreviewManager
         }
 
         fun attachSurface(surfaceProvider: Preview.SurfaceProvider) {
+            Timber.d("HC_CAM attachSurface called, isBound=%b, hash=%x", isBound, instanceHash)
             preview.setSurfaceProvider(surfaceProvider)
         }
 
         fun detachSurface() {
+            Timber.d("HC_CAM detachSurface called, isBound=%b, hash=%x", isBound, instanceHash)
             preview.setSurfaceProvider(null)
         }
 
