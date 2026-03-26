@@ -173,6 +173,7 @@ private fun SetupContent(
         }
 
     DisposableEffect(Unit) {
+        cameraPreviewManager.attachSurface(previewView.surfaceProvider)
         onDispose {
             cameraPreviewManager.detachSurface()
             viewSize = IntSize.Zero
@@ -181,11 +182,7 @@ private fun SetupContent(
 
     Box(modifier = Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {
         AndroidView(
-            factory = { _ ->
-                previewView.also { view ->
-                    view.post { cameraPreviewManager.attachSurface(view.surfaceProvider) }
-                }
-            },
+            factory = { previewView },
             modifier = Modifier.fillMaxSize(),
         )
 

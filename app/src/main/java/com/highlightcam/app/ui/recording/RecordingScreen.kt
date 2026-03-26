@@ -410,15 +410,12 @@ private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
         }
 
     DisposableEffect(Unit) {
+        cameraPreviewManager.attachSurface(previewView.surfaceProvider)
         onDispose { cameraPreviewManager.detachSurface() }
     }
 
     AndroidView(
-        factory = { _ ->
-            previewView.also { view ->
-                view.post { cameraPreviewManager.attachSurface(view.surfaceProvider) }
-            }
-        },
+        factory = { previewView },
         modifier = Modifier.fillMaxSize(),
     )
 }
