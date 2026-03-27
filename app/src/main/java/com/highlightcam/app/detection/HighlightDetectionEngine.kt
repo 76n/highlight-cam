@@ -39,7 +39,6 @@ class HighlightDetectionEngine
     ) {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private var collectionJob: Job? = null
-        private var configSyncJob: Job? = null
         private var goalZoneSet: GoalZoneSet = GoalZoneSet.DEFAULT
         val stateMachine = DetectionStateMachine()
 
@@ -60,23 +59,27 @@ class HighlightDetectionEngine
         val debugInfo: StateFlow<DebugInfo> = _debugInfo.asStateFlow()
 
         private val recentInferenceTimes = ArrayDeque<Long>(MAX_INFERENCE_HISTORY)
+        private var frameCount = 0L
 
-        // Starts frame-only collection for auto-follow preview tracking.
-        // Does not start audio analysis or the detection state machine.
+        init {
+            scope.launch {
+                userPreferencesRepository.autoFollowConfig.collect { cfg ->
+                    autoFollowConfig = cfg
+                }
+            }
+        }
+
         fun startPreviewTracking(goalZoneSet: GoalZoneSet) {
             this.goalZoneSet = goalZoneSet
-            ensureConfigSync()
             collectionJob?.cancel()
             collectionJob = scope.launch { collectFrames() }
         }
 
-        // Starts full detection: audio analysis + state machine + frame collection.
-        // Supersedes preview-only tracking.
         fun start(goalZoneSet: GoalZoneSet) {
+            Timber.d("DetectionEngine start() called, goalZoneSet=%s", goalZoneSet)
             this.goalZoneSet = goalZoneSet
             stateMachine.start()
             audioAnalyzer.start()
-            ensureConfigSync()
 
             collectionJob?.cancel()
             collectionJob =
@@ -86,8 +89,6 @@ class HighlightDetectionEngine
                 }
         }
 
-        // Stops full detection mode and falls back to preview-only tracking
-        // so auto-follow continues between recordings.
         fun stop() {
             collectionJob?.cancel()
             collectionJob = null
@@ -96,25 +97,12 @@ class HighlightDetectionEngine
             collectionJob = scope.launch { collectFrames() }
         }
 
-        // Stops everything including preview tracking. Call from ViewModel.onCleared.
         fun stopAll() {
             collectionJob?.cancel()
             collectionJob = null
-            configSyncJob?.cancel()
-            configSyncJob = null
             audioAnalyzer.stop()
             stateMachine.stop()
             mutableCropWindow.value = CropWindow.FULL_FRAME
-        }
-
-        private fun ensureConfigSync() {
-            if (configSyncJob?.isActive == true) return
-            configSyncJob =
-                scope.launch {
-                    userPreferencesRepository.autoFollowConfig.collect { cfg ->
-                        autoFollowConfig = cfg
-                    }
-                }
         }
 
         @Suppress("TooGenericExceptionCaught")
@@ -124,6 +112,16 @@ class HighlightDetectionEngine
                     val detections = tfliteDetector.detect(bitmap)
                     val sensitivity = userPreferencesRepository.detectionSensitivity.first()
                     val result = goalEventAnalyzer.analyze(detections, goalZoneSet, sensitivity)
+
+                    frameCount++
+                    if (frameCount % 30 == 0L) {
+                        Timber.d(
+                            "DetectionEngine frame %d, detections=%d, state=%s",
+                            frameCount,
+                            detections.size,
+                            stateMachine.stateLabel,
+                        )
+                    }
 
                     trackInferenceTime(tfliteDetector.lastInferenceTimeMs)
                     updateDebugVisual(result)
@@ -166,6 +164,9 @@ class HighlightDetectionEngine
             action: DetectionAction,
             goalZoneId: String?,
         ) {
+            if (action !is DetectionAction.None) {
+                Timber.d("DetectionEngine event: %s", action)
+            }
             when (action) {
                 is DetectionAction.TriggerSave -> {
                     _eventFlow.tryEmit(

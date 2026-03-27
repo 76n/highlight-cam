@@ -128,11 +128,6 @@ class CameraPreviewManager
             preview.setSurfaceProvider(surfaceProvider)
         }
 
-        fun detachSurface() {
-            Timber.d("HC_CAM detachSurface called, isBound=%b, hash=%x", isBound, instanceHash)
-            preview.setSurfaceProvider(null)
-        }
-
         private fun startWatchdog() {
             watchdogScope.launch {
                 while (true) {

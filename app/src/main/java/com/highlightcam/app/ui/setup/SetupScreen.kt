@@ -174,10 +174,7 @@ private fun SetupContent(
 
     DisposableEffect(Unit) {
         cameraPreviewManager.attachSurface(previewView.surfaceProvider)
-        onDispose {
-            cameraPreviewManager.detachSurface()
-            viewSize = IntSize.Zero
-        }
+        onDispose { viewSize = IntSize.Zero }
     }
 
     Box(modifier = Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {

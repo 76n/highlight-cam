@@ -2,6 +2,7 @@ package com.highlightcam.app.recording
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Recorder
@@ -260,17 +261,33 @@ class CircularBufferRecorder
             activeRecording = recording
             delay(config.segmentDurationSeconds * 1000L)
             recording.stop()
+            activeRecording = null
             finalizeDeferred.await()
 
-            val durationMs = System.currentTimeMillis() - startTimeMs
+            val actualDurationMs =
+                getMediaDuration(segmentFile)
+                    ?: (System.currentTimeMillis() - startTimeMs)
 
             if (segmentFile.exists() && segmentFile.length() > 0) {
                 segmentMutex.withLock {
-                    segments.addLast(SegmentFile(segmentFile, startTimeMs, durationMs))
+                    segments.addLast(SegmentFile(segmentFile, startTimeMs, actualDurationMs))
                     trimBuffer()
                 }
             } else {
                 segmentFile.delete()
+            }
+        }
+
+        private fun getMediaDuration(file: File): Long? {
+            val retriever = MediaMetadataRetriever()
+            return try {
+                retriever.setDataSource(file.absolutePath)
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong()
+            } catch (e: Exception) {
+                Timber.w(e, "Could not read duration from %s", file.name)
+                null
+            } finally {
+                retriever.release()
             }
         }
 
