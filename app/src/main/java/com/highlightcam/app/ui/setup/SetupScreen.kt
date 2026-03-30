@@ -173,7 +173,9 @@ private fun SetupContent(
         }
 
     DisposableEffect(Unit) {
-        cameraPreviewManager.attachSurface(previewView.surfaceProvider)
+        previewView.post {
+            cameraPreviewManager.attachSurface(previewView.surfaceProvider)
+        }
         onDispose { viewSize = IntSize.Zero }
     }
 

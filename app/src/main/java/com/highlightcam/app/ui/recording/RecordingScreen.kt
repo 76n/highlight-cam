@@ -410,7 +410,9 @@ private fun CameraPreview(cameraPreviewManager: CameraPreviewManager) {
         }
 
     DisposableEffect(Unit) {
-        cameraPreviewManager.attachSurface(previewView.surfaceProvider)
+        previewView.post {
+            cameraPreviewManager.attachSurface(previewView.surfaceProvider)
+        }
         onDispose { }
     }
 
